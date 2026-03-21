@@ -27,8 +27,8 @@ resources:
             parameters:
               - "--s3-bucket"
               - ${var.s3_bucket}
-          environment_variables:
-            GOOGLEMAPS_API_KEY: "{{secrets/property-data-platform/GOOGLEMAPS_API_KEY}}"
+            environment_variables:
+              GOOGLEMAPS_API_KEY: "{{secrets/property-data-platform/GOOGLEMAPS_API_KEY}}"
 
         - task_key: run_pipeline
           depends_on:

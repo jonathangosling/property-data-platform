@@ -4,6 +4,7 @@ bundle:
 variables:
   s3_bucket:
     description: S3 bucket name for Delta Lake storage
+    default: ""
 
 include:
   - resources/*.yml
