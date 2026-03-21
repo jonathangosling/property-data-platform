@@ -33,6 +33,15 @@ resources:
             notebook_path: ${workspace.file_path}/notebooks/ingest
             base_parameters:
               s3_bucket: ${var.s3_bucket}
+          libraries:
+            - pypi:
+                package: requests
+            - pypi:
+                package: beautifulsoup4
+            - pypi:
+                package: yfinance
+            - pypi:
+                package: pandas
 
         - task_key: run_pipeline
           depends_on:
