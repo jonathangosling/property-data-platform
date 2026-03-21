@@ -12,9 +12,10 @@ resources:
         - file:
             path: ../pipelines/gold.py
 
-      # Tables stored at a known S3 path and registered in Hive metastore.
-      # Portable — can be registered in Glue/Athena without any migration.
-      storage: s3://${var.s3_bucket}/delta
+      # Output tables registered in Unity Catalog under this schema.
+      # Serverless pipelines require UC — see README for portability notes.
+      catalog: main
+      target: property_data
 
       configuration:
         s3_bucket: ${var.s3_bucket}
