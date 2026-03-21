@@ -1,207 +1,230 @@
 """
-Scrape Rightmove property data and financial indicators, writing raw records
-to Delta tables in S3 (landing zone). Runs as a Databricks Python script task.
+Scrape Rightmove property listings using requests + BeautifulSoup.
+
+Extracts data from the __NEXT_DATA__ JSON blob embedded in the HTML —
+more reliable than parsing CSS class names which are hashed and change frequently.
+Coordinates are taken directly from Rightmove. Postcodes are obtained via
+reverse geocoding (lat/long → postcode) using the Google Maps API, which is
+more accurate than forward geocoding from an address string.
+Pagination is driven dynamically from the JSON so no page size is hardcoded.
 """
-import argparse
+import json
 import logging
-from datetime import date, datetime, timedelta
+import time
+from datetime import date
 
 import requests
-from pyspark.sql import SparkSession
-from pyspark.sql import functions as F
+from bs4 import BeautifulSoup
 
-from financials import get_interest_rates, get_spy_price
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.support.ui import WebDriverWait
-from webdriver_manager.chrome import ChromeDriverManager
+log = logging.getLogger(__name__)
 
-RIGHTMOVE_URL = (
+BASE_URL = (
     "https://www.rightmove.co.uk/property-to-rent/find.html"
-    "?locationIdentifier=REGION%5E92829&maxBedrooms=2&minBedrooms=2"
-    "&propertyTypes=&includeLetAgreed=false&mustHave=&dontShow="
-    "&furnishTypes=&keywords="
+    "?locationIdentifier=REGION%5E92829"
+    "&maxBedrooms=2&minBedrooms=2"
+    "&propertyTypes=&includeLetAgreed=false"
+    "&mustHave=&dontShow=&furnishTypes=&keywords="
 )
 
-logging.basicConfig(level=logging.INFO, format="%(levelname)s — %(message)s")
-log = logging.getLogger(__name__)
+# Generic browser User-Agent — avoids the default python-requests string
+# which is commonly blocked. Does not need to match the running machine.
+HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/120.0.0.0 Safari/537.36"
+    )
+}
+
+# If more than this fraction of property records on a page fail to parse,
+# raise an error — likely indicates a structural change to Rightmove's JSON.
+PARSE_FAILURE_THRESHOLD = 0.1
 
 
 # ---------------------------------------------------------------------------
 # Scraping
 # ---------------------------------------------------------------------------
 
-def _chrome_driver():
-    options = Options()
-    options.add_argument("--headless")
-    options.add_argument("--no-sandbox")
-    options.add_argument("--disable-dev-shm-usage")
-    options.add_argument("--disable-extensions")
-    service = Service(ChromeDriverManager().install())
-    return webdriver.Chrome(service=service, options=options)
+def _fetch_next_data(session: requests.Session, index: int) -> dict:
+    """Fetch a Rightmove page and return the parsed __NEXT_DATA__ JSON."""
+    url = BASE_URL if index == 0 else f"{BASE_URL}&index={index}"
+    r = session.get(url, headers=HEADERS, timeout=30)
+    r.raise_for_status()
+
+    soup = BeautifulSoup(r.text, "html.parser")
+    script = soup.find("script", {"id": "__NEXT_DATA__"})
+    if not script:
+        raise RuntimeError(
+            f"__NEXT_DATA__ not found at index={index}. "
+            "Rightmove may have changed their page structure."
+        )
+    return json.loads(script.string)
 
 
-def _accept_cookies(driver):
+def _get_search_results(data: dict) -> dict:
+    """Navigate to the search results within __NEXT_DATA__."""
     try:
-        driver.find_element(By.ID, "onetrust-accept-btn-handler").click()
-    except Exception:
-        pass
+        return data["props"]["pageProps"]["searchResults"]
+    except KeyError:
+        raise RuntimeError(
+            "Could not find props.pageProps.searchResults in __NEXT_DATA__. "
+            "Rightmove may have changed their data structure."
+        )
 
 
-def scrape_rightmove() -> list[dict]:
-    """Scrape all pages of Rightmove listings. Returns list of raw records."""
-    driver = _chrome_driver()
-    records = []
+def _parse_page(
+    search_results: dict, scraped_at: str, page_index: int
+) -> tuple[list[dict], list[dict]]:
+    """
+    Extract property and price records from a page's search results.
+    Raises if the parse failure rate exceeds PARSE_FAILURE_THRESHOLD.
+    """
+    raw_properties = search_results.get("properties", [])
+    if not raw_properties:
+        raise RuntimeError(
+            f"No properties found at index={page_index}. "
+            "Rightmove may have changed their data structure."
+        )
+
+    properties, prices = [], []
+    failures = 0
+
+    for prop in raw_properties:
+        try:
+            prop_id = int(prop["id"])
+            price = int(prop["price"]["amount"])
+            address = prop["displayAddress"]
+            lat = round(float(prop["location"]["latitude"]), 8)
+            lng = round(float(prop["location"]["longitude"]), 8)
+
+            properties.append({
+                "prop_id": prop_id,
+                "address": address,
+                "latitude": lat,
+                "longitude": lng,
+                "scraped_at": scraped_at,
+            })
+            prices.append({
+                "prop_id": prop_id,
+                "date": scraped_at,
+                "price": price,
+                "scraped_at": scraped_at,
+            })
+        except (KeyError, ValueError, TypeError):
+            failures += 1
+
+    failure_rate = failures / len(raw_properties)
+    if failure_rate > PARSE_FAILURE_THRESHOLD:
+        raise RuntimeError(
+            f"Parse failure rate {failure_rate:.0%} exceeds threshold "
+            f"{PARSE_FAILURE_THRESHOLD:.0%} at page index={page_index} "
+            f"({failures}/{len(raw_properties)} records failed). "
+            "Rightmove may have changed their JSON structure."
+        )
+    if failures:
+        log.warning(
+            f"Page index={page_index}: {failures}/{len(raw_properties)} records "
+            "failed to parse but below threshold — continuing."
+        )
+
+    return properties, prices
+
+
+def scrape_rightmove() -> tuple[list[dict], list[dict]]:
+    """
+    Scrape all pages of Rightmove 2-bed SW London rentals.
+    Returns (properties, prices) as lists of dicts.
+    Postcodes are not included here — added separately via reverse geocoding.
+    """
+    session = requests.Session()
     scraped_at = str(date.today())
+    all_properties, all_prices = [], []
 
-    try:
-        log.info("Navigating to Rightmove...")
-        driver.get(RIGHTMOVE_URL)
-        _accept_cookies(driver)
+    log.info("Fetching page 1...")
+    data = _fetch_next_data(session, 0)
+    search_results = _get_search_results(data)
 
-        button = driver.find_element(By.XPATH, "//button[@title='Next page']")
-        pages = 0
+    pagination = search_results.get("pagination", {})
+    total_pages = int(pagination.get("total", 1))
+    log.info(f"Found {total_pages} pages.")
 
-        while True:
-            WebDriverWait(driver, 20).until(
-                EC.presence_of_element_located((By.CLASS_NAME, "propertyCard-anchor"))
-            )
-            for card in driver.find_elements(By.CLASS_NAME, "l-searchResult"):
-                prop_id = int(
-                    card.find_element(By.CLASS_NAME, "propertyCard-anchor")
-                    .get_attribute("id")
-                    .replace("prop", "")
-                )
-                price_text = card.find_element(By.CLASS_NAME, "propertyCard-priceValue").text
-                price = int(price_text[1:-4].replace(",", ""))
-                address = card.find_element(
-                    By.CLASS_NAME, "propertyCard-address"
-                ).get_attribute("title")
-                records.append(
-                    {"prop_id": prop_id, "price": price, "address": address, "scraped_at": scraped_at}
-                )
-            pages += 1
+    props, prices = _parse_page(search_results, scraped_at, page_index=0)
+    all_properties.extend(props)
+    all_prices.extend(prices)
 
-            button = driver.find_element(By.XPATH, "//button[@title='Next page']")
-            if not button.is_enabled():
-                break
-            WebDriverWait(driver, 20).until(EC.element_to_be_clickable(button))
-            button.click()
-            _accept_cookies(driver)
+    # Drive pagination from the options list — no hardcoded increment.
+    page_indices = [
+        int(opt["value"])
+        for opt in pagination.get("options", [])
+        if int(opt["value"]) > 0
+    ]
 
-    finally:
-        driver.quit()
+    for i, index in enumerate(page_indices, start=2):
+        time.sleep(1)  # polite delay
+        log.info(f"Fetching page {i} of {total_pages} (index={index})...")
+        data = _fetch_next_data(session, index)
+        search_results = _get_search_results(data)
+        props, prices = _parse_page(search_results, scraped_at, page_index=index)
+        all_properties.extend(props)
+        all_prices.extend(prices)
 
-    log.info(f"Scraped {len(records)} properties across {pages} pages.")
-    return records
+    log.info(f"Scraped {len(all_properties)} properties across {total_pages} pages.")
+    return all_properties, all_prices
 
 
-def geocode(address: str, api_key: str) -> dict:
-    """Call Google Maps Geocoding API to get postcode and coordinates."""
-    query = (address + ", London, UK").replace(" ", "%20")
+# ---------------------------------------------------------------------------
+# Reverse geocoding
+# ---------------------------------------------------------------------------
+
+def reverse_geocode(lat: float, lng: float, api_key: str) -> str | None:
+    """
+    Reverse geocode coordinates to a postcode using the Google Maps API.
+    More accurate than forward geocoding from an address string since the
+    coordinates come directly from Rightmove.
+    Returns the postcode string or None if not found.
+    """
     r = requests.get(
-        f"https://maps.googleapis.com/maps/api/geocode/json?address={query}&key={api_key}"
+        "https://maps.googleapis.com/maps/api/geocode/json",
+        params={"latlng": f"{lat},{lng}", "key": api_key},
+        timeout=10,
     )
     r.raise_for_status()
-    result = r.json()["results"][0]
 
-    postcode = None
-    for comp in result["address_components"]:
-        if "postal_code" in comp["types"]:
-            postcode = comp["long_name"]
-            break
-
-    return {
-        "postcode": postcode,
-        "latitude": round(result["geometry"]["location"]["lat"], 8),
-        "longitude": round(result["geometry"]["location"]["lng"], 8),
-    }
+    for result in r.json().get("results", []):
+        for component in result.get("address_components", []):
+            if "postal_code" in component.get("types", []):
+                return component["long_name"]
+    return None
 
 
-# ---------------------------------------------------------------------------
-# Main
-# ---------------------------------------------------------------------------
+def add_postcodes(properties: list[dict], api_key: str) -> list[dict]:
+    """
+    Add postcode to each property record via reverse geocoding.
+    Missing postcodes are stored as None — the bronze DLT expectation
+    @dlt.expect("postcode_coverage", "postcode IS NOT NULL") will surface
+    the overall null rate in the pipeline quality metrics.
+    """
+    missing = 0
+    for prop in properties:
+        postcode = reverse_geocode(prop["latitude"], prop["longitude"], api_key)
+        prop["postcode"] = postcode
+        if not postcode:
+            missing += 1
 
-def main(s3_bucket: str, googlemaps_api_key: str):
-    spark = SparkSession.builder.getOrCreate()
-    today = date.today()
-
-    # --- Properties & prices ---
-    log.info("Scraping Rightmove...")
-    raw = scrape_rightmove()
-
-    log.info("Geocoding addresses...")
-    properties, prices = [], []
-    seen_props = set()
-    for rec in raw:
-        geo = geocode(rec["address"], googlemaps_api_key)
-        if rec["prop_id"] not in seen_props:
-            seen_props.add(rec["prop_id"])
-            properties.append({
-                "prop_id": rec["prop_id"],
-                "address": rec["address"],
-                "postcode": geo["postcode"],
-                "latitude": geo["latitude"],
-                "longitude": geo["longitude"],
-                "scraped_at": rec["scraped_at"],
-            })
-        prices.append({
-            "prop_id": rec["prop_id"],
-            "date": str(today),
-            "price": rec["price"],
-            "scraped_at": rec["scraped_at"],
-        })
-
-    (
-        spark.createDataFrame(properties)
-        .write.format("delta")
-        .mode("append")
-        .save(f"s3://{s3_bucket}/landing/properties")
-    )
-    (
-        spark.createDataFrame(prices)
-        .write.format("delta")
-        .mode("append")
-        .save(f"s3://{s3_bucket}/landing/prices")
-    )
-    log.info(f"Written {len(properties)} properties and {len(prices)} prices.")
-
-    # --- Interest rates ---
-    log.info("Fetching interest rate data...")
-    rates = get_interest_rates(today - timedelta(days=7), today)
-    if rates:
-        (
-            spark.createDataFrame(rates)
-            .write.format("delta")
-            .mode("append")
-            .save(f"s3://{s3_bucket}/landing/interest_rates")
+    if missing:
+        log.warning(
+            f"{missing}/{len(properties)} properties have no postcode. "
+            "These will surface in DLT bronze quality metrics."
         )
-
-    # --- SPY price ---
-    log.info("Fetching SPY price...")
-    spy = get_spy_price()
-    if spy:
-        (
-            spark.createDataFrame([spy])
-            .write.format("delta")
-            .mode("append")
-            .save(f"s3://{s3_bucket}/landing/spy_prices")
-        )
-
-    log.info("Scrape job complete.")
+    return properties
 
 
 if __name__ == "__main__":
-    import os
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s — %(message)s")
 
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--s3-bucket", required=True)
-    args = parser.parse_args()
+    properties, prices = scrape_rightmove()
 
-    main(
-        s3_bucket=args.s3_bucket,
-        googlemaps_api_key=os.environ["GOOGLEMAPS_API_KEY"],
-    )
+    print(f"\nProperties scraped: {len(properties)}")
+    print(f"Price records:      {len(prices)}")
+    print(f"\nSample property:  {properties[0]}")
+    print(f"Sample price:     {prices[0]}")

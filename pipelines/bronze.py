@@ -9,6 +9,9 @@ S3_BUCKET = spark.conf.get("s3_bucket")
     comment="Raw property records written by the scrape job.",
     table_properties={"quality": "bronze"},
 )
+# Warn on missing postcodes — tracked in DLT quality metrics.
+# A high null rate indicates reverse geocoding failures in the scrape job.
+@dlt.expect("postcode_present", "postcode IS NOT NULL")
 def bronze_properties():
     return spark.read.format("delta").load(f"s3://{S3_BUCKET}/landing/properties")
 
