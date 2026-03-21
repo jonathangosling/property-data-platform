@@ -9,40 +9,12 @@ resources:
         timezone_id: "Europe/London"
         pause_status: PAUSED
 
-      job_clusters:
-        - job_cluster_key: scrape_cluster
-          new_cluster:
-            num_workers: 0
-            spark_version: "15.4.x-scala2.12"
-            node_type_id: m5.large
-            spark_conf:
-              spark.databricks.cluster.profile: singleNode
-              spark.master: "local[*]"
-            custom_tags:
-              ResourceClass: SingleNode
-            aws_attributes:
-              availability: SPOT_WITH_FALLBACK
-              ebs_volume_type: GENERAL_PURPOSE_SSD
-              ebs_volume_count: 1
-              ebs_volume_size: 32
-
       tasks:
         - task_key: scrape
-          job_cluster_key: scrape_cluster
-          spark_python_task:
-            python_file: ${workspace.file_path}/src/ingest.py
-            parameters:
-              - "--s3-bucket"
-              - ${var.s3_bucket}
-          libraries:
-            - pypi:
-                package: requests
-            - pypi:
-                package: beautifulsoup4
-            - pypi:
-                package: yfinance
-            - pypi:
-                package: pandas
+          notebook_task:
+            notebook_path: ${workspace.file_path}/notebooks/ingest
+            base_parameters:
+              s3_bucket: ${var.s3_bucket}
 
         - task_key: run_pipeline
           depends_on:
