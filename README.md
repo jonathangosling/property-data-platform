@@ -51,7 +51,7 @@ docs/             # Setup notes
 
 | Resource | Purpose |
 |---|---|
-| Lakeflow pipeline `property-data-platform-pipeline` | Serverless triggered pipeline — bronze ingest, silver dedup, gold aggregations |
+| Lakeflow pipeline `property-data-platform-pipeline` | Serverless triggered pipeline — silver dedup, gold aggregations |
 | Job `property-data-platform-scrape` | Serverless job — scrapes Rightmove + financials, then triggers the pipeline |
 
 ### Databricks (auto-provisioned)
@@ -129,3 +129,45 @@ Set a calendar reminder before the 90-day expiry — CI/CD will fail silently if
 - **Merge to main** — Terraform applied; DABs bundle deployed to prod
 
 Changes to `terraform/**` only trigger Terraform workflows. Changes to `databricks.yml`, `resources/**`, `pipelines/**`, `src/**` only trigger the Databricks deploy workflow.
+
+## Delta tables
+
+### Landing (written by the scrape job)
+
+| Table | S3 path | Description |
+|---|---|---|
+| `landing/properties` | `s3://{bucket}/landing/properties` | Raw property records from Rightmove, partitioned by `scraped_at` |
+| `landing/prices` | `s3://{bucket}/landing/prices` | Raw price records from Rightmove |
+| `landing/interest_rates` | `s3://{bucket}/landing/interest_rates` | Bank of England SONIA rates |
+| `landing/spy_prices` | `s3://{bucket}/landing/spy_prices` | SPY ETF close prices |
+
+### Pipeline (managed by Unity Catalog, registered under `main.property_data`)
+
+| Table | Description |
+|---|---|
+| `silver_properties` | Deduplicated property dimension — one row per `prop_id` |
+| `silver_prices` | Deduplicated price fact — one row per `prop_id` per date |
+| `silver_interest_rates` | Deduplicated SONIA rates — one row per date |
+| `silver_spy_prices` | Deduplicated SPY prices — one row per date |
+| `gold_property_fact` | Avg/median price and count by date and SW area code |
+| `gold_current_properties` | Snapshot of listings on the most recent scrape date |
+| `gold_date_dim` | Date dimension with month and year attributes |
+| `gold_area_dim` | SW London area code to district name mapping |
+
+### Portability
+
+Silver and gold tables are UC-managed (serverless pipelines require UC). If you ever need to move data to Glue/Athena or another platform, create external copies with a CTAS:
+
+```sql
+CREATE TABLE glue_db.silver_properties
+LOCATION 's3://your-bucket/glue/silver_properties'
+AS SELECT * FROM main.property_data.silver_properties;
+```
+
+The landing tables are already at known S3 paths and can be registered directly in Glue without any data movement:
+
+```sql
+CREATE EXTERNAL TABLE glue_db.landing_properties
+LOCATION 's3://your-bucket/landing/properties'
+STORED AS PARQUET TBLPROPERTIES ('parquet.compress'='SNAPPY');
+```
