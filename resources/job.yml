@@ -9,24 +9,34 @@ resources:
         timezone_id: "Europe/London"
         pause_status: PAUSED
 
-      environments:
-        - environment_key: scrape_env
-          spec:
-            client: "1"
-            dependencies:
-              - requests
-              - beautifulsoup4
-              - yfinance
-              - pandas
+      job_clusters:
+        - job_cluster_key: scrape_cluster
+          new_cluster:
+            num_workers: 0
+            spark_version: "15.4.x-scala2.12"
+            node_type_id: m5.large
+            spark_conf:
+              spark.master: "local[*]"
+            aws_attributes:
+              availability: SPOT_WITH_FALLBACK
 
       tasks:
         - task_key: scrape
-          environment_key: scrape_env
-          python_script_task:
+          job_cluster_key: scrape_cluster
+          spark_python_task:
             python_file: ./src/ingest.py
             parameters:
               - "--s3-bucket"
               - ${var.s3_bucket}
+          libraries:
+            - pypi:
+                package: requests
+            - pypi:
+                package: beautifulsoup4
+            - pypi:
+                package: yfinance
+            - pypi:
+                package: pandas
 
         - task_key: run_pipeline
           depends_on:
