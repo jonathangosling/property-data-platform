@@ -7,7 +7,8 @@ resource "databricks_storage_credential" "delta_lake" {
     role_arn = aws_iam_role.unity_catalog_s3.arn
   }
 
-  comment = "Storage credential for Delta Lake bucket"
+  comment    = "Storage credential for Delta Lake bucket"
+  depends_on = [null_resource.unity_catalog_s3_self_trust]
 }
 
 # External location — exposes the S3 bucket as a UC-managed path.
