@@ -1,6 +1,7 @@
 import dlt
 from pyspark.sql import functions as F
 from pyspark.sql.window import Window
+# Reads raw tables, deduplictates and sets expectations
 
 S3_BUCKET = spark.conf.get("s3_bucket")
 
