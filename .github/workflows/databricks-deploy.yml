@@ -1,0 +1,54 @@
+name: Databricks Deploy
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'databricks.yml'
+      - 'resources/**'
+      - 'pipelines/**'
+      - 'src/**'
+      - 'scripts/**'
+  push:
+    branches:
+      - main
+    paths:
+      - 'databricks.yml'
+      - 'resources/**'
+      - 'pipelines/**'
+      - 'src/**'
+      - 'scripts/**'
+
+jobs:
+  validate:
+    name: Validate Bundle
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: databricks/setup-cli@main
+
+      - name: Validate bundle
+        env:
+          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+        run: databricks bundle validate -t prod
+
+  deploy:
+    name: Deploy Bundle
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: databricks/setup-cli@main
+
+      - name: Deploy bundle
+        env:
+          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+          BUNDLE_VAR_s3_bucket: ${{ secrets.S3_BUCKET }}
+          BUNDLE_VAR_instance_profile_arn: ${{ secrets.INSTANCE_PROFILE_ARN }}
+        run: databricks bundle deploy -t prod

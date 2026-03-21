@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+
+# Terraform
+**/.terraform/
+*.tfstate
+*.tfstate.backup
+*.tfvars
+.terraform.lock.hcl
+
+# Databricks
+.databricks/
+
+# Secrets / credentials
+credentials.py
+.env
+*.pem
+
+# OS
+.DS_Store
