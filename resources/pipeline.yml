@@ -8,9 +8,9 @@ resources:
 
       libraries:
         - file:
-            path: ./pipelines/silver.py
+            path: ../pipelines/silver.py
         - file:
-            path: ./pipelines/gold.py
+            path: ../pipelines/gold.py
 
       # Output tables registered in Unity Catalog under this schema.
       catalog: main
