@@ -9,7 +9,6 @@ on:
       - 'resources/**'
       - 'pipelines/**'
       - 'src/**'
-      - 'scripts/**'
   push:
     branches:
       - main
@@ -18,7 +17,6 @@ on:
       - 'resources/**'
       - 'pipelines/**'
       - 'src/**'
-      - 'scripts/**'
 
 jobs:
   validate:
@@ -50,5 +48,4 @@ jobs:
           DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
           DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
           BUNDLE_VAR_s3_bucket: ${{ secrets.S3_BUCKET }}
-          BUNDLE_VAR_instance_profile_arn: ${{ secrets.INSTANCE_PROFILE_ARN }}
         run: databricks bundle deploy -t prod

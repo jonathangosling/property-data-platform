@@ -7,43 +7,26 @@ resources:
       schedule:
         quartz_cron_expression: "0 0 8 ? * MON,FRI"
         timezone_id: "Europe/London"
-        pause_status: UNPAUSED
+        pause_status: PAUSED
 
-      job_clusters:
-        - job_cluster_key: scrape_cluster
-          new_cluster:
-            num_workers: 0
-            spark_conf:
-              spark.master: "local[*, 4]"
-            node_type_id: m5.large
-            spark_version: "15.4.x-scala2.12"
-            aws_attributes:
-              instance_profile_arn: ${var.instance_profile_arn}
-              availability: SPOT_WITH_FALLBACK
-            # Installs Chrome and ChromeDriver for Selenium.
-            init_scripts:
-              - workspace:
-                  destination: /Shared/property-data-platform/install_chrome.sh
+      environments:
+        - environment_key: scrape_env
+          spec:
+            client: "1"
+            dependencies:
+              - requests
+              - beautifulsoup4
+              - yfinance
+              - pandas
 
       tasks:
         - task_key: scrape
-          job_cluster_key: scrape_cluster
+          environment_key: scrape_env
           python_script_task:
-            python_file: ./src/scrape.py
+            python_file: ./src/ingest.py
             parameters:
               - "--s3-bucket"
               - ${var.s3_bucket}
-          libraries:
-            - pypi:
-                package: selenium==4.15.0
-            - pypi:
-                package: webdriver-manager==4.0.1
-            - pypi:
-                package: requests
-            - pypi:
-                package: yfinance
-            - pypi:
-                package: pandas
 
         - task_key: run_pipeline
           depends_on:

@@ -4,8 +4,7 @@ bundle:
 variables:
   s3_bucket:
     description: S3 bucket name for Delta Lake storage
-  instance_profile_arn:
-    description: IAM instance profile ARN for Databricks cluster S3 access
+    default: ""
 
 include:
   - resources/*.yml

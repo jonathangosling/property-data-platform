@@ -2,34 +2,21 @@ resources:
   pipelines:
     rightmove_pipeline:
       name: property-data-platform-pipeline
+      serverless: true
       continuous: false
       channel: CURRENT
 
-      # Single-node cluster — cheapest option for this workload.
-      # To use serverless instead, remove the clusters block and add: serverless: true
-      # (requires Unity Catalog for external S3 access).
-      clusters:
-        - label: default
-          num_workers: 0
-          spark_conf:
-            spark.master: "local[*, 4]"
-          node_type_id: m5.large
-          aws_attributes:
-            instance_profile_arn: ${var.instance_profile_arn}
-            availability: SPOT_WITH_FALLBACK
-
       libraries:
         - file:
-            path: ./pipelines/bronze.py
+            path: ../pipelines/silver.py
         - file:
-            path: ./pipelines/silver.py
-        - file:
-            path: ./pipelines/gold.py
+            path: ../pipelines/gold.py
 
-      # Output tables registered in Hive metastore under this schema.
+      # Output tables registered in Unity Catalog under this schema.
+      catalog: main
       target: property_data
 
-      # External Delta table storage on S3.
+      # External Delta table storage on S3 via UC external location.
       storage: s3://${var.s3_bucket}/delta
 
       configuration:
