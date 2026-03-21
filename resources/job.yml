@@ -23,12 +23,10 @@ resources:
         - task_key: scrape
           environment_key: scrape_env
           python_script_task:
-            python_file: ./src/scrape.py
+            python_file: ./src/ingest.py
             parameters:
               - "--s3-bucket"
               - ${var.s3_bucket}
-            environment_variables:
-              GOOGLEMAPS_API_KEY: "{{secrets/property-data-platform/GOOGLEMAPS_API_KEY}}"
 
         - task_key: run_pipeline
           depends_on:

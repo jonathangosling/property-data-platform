@@ -7,8 +7,10 @@ Coordinates are taken directly from Rightmove. Postcodes are obtained via
 reverse geocoding (lat/long → postcode) using the Google Maps API, which is
 more accurate than forward geocoding from an address string.
 Pagination is driven dynamically from the JSON so no page size is hardcoded.
+
+Entry point for the Databricks job: accepts --s3-bucket, reads the Google Maps
+API key from Databricks secrets, and writes landing JSON files to S3.
 """
-import json
 import logging
 import time
 from datetime import date
@@ -220,10 +222,9 @@ def add_postcodes(properties: list[dict], api_key: str) -> list[dict]:
 
 
 if __name__ == "__main__":
+    # Local smoke test — no API key or S3 needed
     logging.basicConfig(level=logging.INFO, format="%(levelname)s — %(message)s")
-
     properties, prices = scrape_rightmove()
-
     print(f"\nProperties scraped: {len(properties)}")
     print(f"Price records:      {len(prices)}")
     print(f"\nSample property:  {properties[0]}")
