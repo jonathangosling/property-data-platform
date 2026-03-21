@@ -30,7 +30,7 @@ resources:
         - task_key: scrape
           job_cluster_key: scrape_cluster
           spark_python_task:
-            python_file: ../src/ingest.py
+            python_file: ${workspace.file_path}/src/ingest.py
             parameters:
               - "--s3-bucket"
               - ${var.s3_bucket}
