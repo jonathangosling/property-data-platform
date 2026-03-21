@@ -1,3 +1,9 @@
+# Wait for IAM trust policy changes to propagate before Databricks validates the role.
+resource "time_sleep" "wait_for_iam_propagation" {
+  depends_on      = [null_resource.unity_catalog_s3_self_trust]
+  create_duration = "30s"
+}
+
 # Unity Catalog storage credential — registers the IAM role with Databricks
 # so serverless pipelines and UC-enabled clusters can access S3.
 resource "databricks_storage_credential" "delta_lake" {
@@ -8,7 +14,7 @@ resource "databricks_storage_credential" "delta_lake" {
   }
 
   comment    = "Storage credential for Delta Lake bucket"
-  depends_on = [null_resource.unity_catalog_s3_self_trust]
+  depends_on = [time_sleep.wait_for_iam_propagation]
 }
 
 # External location — exposes the S3 bucket as a UC-managed path.
