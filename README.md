@@ -112,6 +112,17 @@ This runs the full Rightmove scrape and prints a sample property and price recor
 | `S3_BUCKET` | Delta Lake bucket name (Terraform output) |
 | `GOOGLEMAPS_API_KEY` | Google Maps API key for reverse geocoding |
 
+### Databricks Personal Access Token
+
+The `DATABRICKS_TOKEN` secret is a Databricks PAT with a 90-day lifetime. To generate or rotate it:
+
+1. Log into the Databricks workspace → click your username (top right) → **User Settings**
+2. **Developer → Access tokens → Manage → Generate new token**
+3. Set a 90-day lifetime, copy the token
+4. Update the `DATABRICKS_TOKEN` secret in GitHub: repo → **Settings → Secrets and variables → Actions**
+
+Set a calendar reminder before the 90-day expiry — CI/CD will fail silently if the token expires without being rotated.
+
 ### CI/CD
 
 - **PR to main** — Terraform plan posted as PR comment; DABs bundle validated
