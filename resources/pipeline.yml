@@ -12,11 +12,8 @@ resources:
         - file:
             path: ../pipelines/gold.py
 
-      # Output tables registered in Unity Catalog under this schema.
-      catalog: main
-      target: property_data
-
-      # External Delta table storage on S3 via UC external location.
+      # Tables stored at a known S3 path and registered in Hive metastore.
+      # Portable — can be registered in Glue/Athena without any migration.
       storage: s3://${var.s3_bucket}/delta
 
       configuration:
