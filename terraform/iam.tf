@@ -18,12 +18,6 @@ resource "aws_iam_role" "unity_catalog_s3" {
             "sts:ExternalId" = var.databricks_account_id
           }
         }
-      },
-      {
-        # Self-referential trust required for Unity Catalog credential vending.
-        Effect    = "Allow"
-        Principal = { AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/property-data-platform-uc-storage" }
-        Action    = "sts:AssumeRole"
       }
     ]
   })
