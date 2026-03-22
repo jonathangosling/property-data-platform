@@ -16,9 +16,11 @@ S3_BUCKET = spark.conf.get("s3_bucket")
 @dlt.expect("valid_coordinates", "latitude IS NOT NULL AND longitude IS NOT NULL")
 def silver_properties():
     w = Window.partitionBy("prop_id").orderBy(F.desc("scraped_at"))
+    w_all = Window.partitionBy("prop_id")
     return (
         spark.read.format("delta").load(f"s3://{S3_BUCKET}/landing/properties")
         .withColumn("row_num", F.row_number().over(w))
+        .withColumn("first_scraped_at", F.min("scraped_at").over(w_all))
         .filter(F.col("row_num") == 1)
         .drop("row_num")
     )

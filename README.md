@@ -187,9 +187,8 @@ Changes to `terraform/**` only trigger Terraform workflows. Changes to `databric
 | `silver_properties` | Deduplicated property dimension — one row per `prop_id` |
 | `silver_prices` | Deduplicated price fact — one row per `prop_id` per date |
 | `silver_spy_prices` | Deduplicated SPY prices — one row per date |
-| `gold_property_fact` | Avg/median price and count by date and SW area code |
+| `gold_property_fact` | Avg/median price and count by date and SW area code, with month and year columns |
 | `gold_current_properties` | Snapshot of listings on the most recent scrape date |
-| `gold_date_dim` | Date dimension with month and year attributes |
 | `gold_area_dim` | SW London area code to district name mapping |
 
 ### Portability

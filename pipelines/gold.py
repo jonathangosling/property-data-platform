@@ -11,21 +11,8 @@ SW_AREA_CODES = [
 
 def _extract_area_code(postcode_col):
     """Extract area code (e.g. SW11) from a full postcode (e.g. SW11 1AA)."""
-    return F.when(
-        F.instr(postcode_col, " ") > 0,
-        F.regexp_replace(F.substring_index(postcode_col, " ", 1), " ", ""),
-    ).otherwise(F.regexp_replace(postcode_col, " ", ""))
+    return F.substring_index(postcode_col, " ", 1)
 
-
-@dlt.table(name="gold_date_dim", comment="Date dimension with month and year attributes.")
-def gold_date_dim():
-    return (
-        dlt.read("silver_prices")
-        .select("date")
-        .distinct()
-        .withColumn("month", F.date_format("date", "MMMM"))
-        .withColumn("year", F.year("date").cast("string"))
-    )
 
 
 @dlt.table(name="gold_area_dim", comment="SW London area code reference table.")
@@ -57,19 +44,23 @@ def gold_property_fact():
         .filter(F.col("area_code").isin(SW_AREA_CODES))
     )
 
-    area_agg = joined.groupBy("date", "area_code").agg(
+    area_agg = joined.groupBy("scraped_at", "area_code").agg(
         F.avg("price").cast("int").alias("avg_price"),
         F.percentile_approx("price", 0.5).cast("int").alias("median_price"),
         F.count("*").alias("num_properties"),
+    ).withColumnRenamed("scraped_at", "date")
+
+    all_agg = prices.groupBy("scraped_at").agg(
+        F.avg("price").cast("int").alias("avg_price"),
+        F.percentile_approx("price", 0.5).cast("int").alias("median_price"),
+        F.count("*").alias("num_properties"),
+    ).withColumnRenamed("scraped_at", "date").withColumn("area_code", F.lit("all"))
+
+    return (
+        area_agg.unionByName(all_agg)
+        .withColumn("month", F.date_format(F.col("date"), "MMMM"))
+        .withColumn("year", F.date_format(F.col("date"), "yyyy"))
     )
-
-    all_agg = prices.groupBy("date").agg(
-        F.avg("price").cast("int").alias("avg_price"),
-        F.percentile_approx("price", 0.5).cast("int").alias("median_price"),
-        F.count("*").alias("num_properties"),
-    ).withColumn("area_code", F.lit("all"))
-
-    return area_agg.unionByName(all_agg)
 
 
 @dlt.table(
@@ -80,10 +71,10 @@ def gold_current_properties():
     prices = dlt.read("silver_prices")
     props = dlt.read("silver_properties")
 
-    max_date = prices.agg(F.max("date")).collect()[0][0]
+    max_date = prices.agg(F.max("scraped_at")).collect()[0][0]
 
     return (
-        prices.filter(F.col("date") == max_date)
+        prices.filter(F.col("scraped_at") == max_date)
         .join(props, "prop_id")
         .withColumn("area_code", _extract_area_code(F.col("postcode")))
         .withColumn(
@@ -92,6 +83,6 @@ def gold_current_properties():
         )
         .select(
             "prop_id", "address", "postcode", "latitude", "longitude",
-            "area_code", "price", "date",
+            "area_code", "price", "scraped_at",
         )
     )
