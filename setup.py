@@ -17,4 +17,7 @@ setup(
         "yfinance",
         "pandas",
     ],
+    extras_require={
+        "test": ["pytest"],
+    },
 )

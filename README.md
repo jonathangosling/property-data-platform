@@ -86,12 +86,22 @@ docs/                             # Setup notes
 cd property-data-platform
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -e .
+pip install -e ".[test]"
 ```
 
-Installing in editable mode (`-e .`) installs the `property_data_platform` package and all dependencies from `setup.py`.
+Installing in editable mode installs the `property_data_platform` package, all runtime dependencies, and `pytest`.
 
-### Testing the scraper
+### Unit tests
+
+```bash
+python -m pytest tests/ -v
+```
+
+Tests cover `_parse_page` in `scrape.py` — the core parsing logic including the failure rate threshold. External API calls (Rightmove, Google Maps, BoE, yfinance) are not mocked as tests against live structure add little value and require credentials.
+
+Tests also run in CI on every push and PR that touches `src/**` or `tests/**`, and must pass before deploy.
+
+### Testing the scraper end-to-end
 
 ```bash
 python -m property_data_platform.scrape
@@ -147,8 +157,8 @@ Set a calendar reminder before the 90-day expiry — CI/CD will fail silently if
 
 ### CI/CD
 
-- **PR to main** — Terraform plan posted as PR comment; DABs bundle validated
-- **Merge to main** — Terraform applied; DABs bundle deployed to prod
+- **PR to main** — unit tests run; Terraform plan posted as PR comment; DABs bundle validated
+- **Merge to main** — unit tests run; Terraform applied; DABs bundle deployed to prod (blocked if tests fail)
 
 Changes to `terraform/**` only trigger Terraform workflows. Changes to `databricks.yml`, `setup.py`, `resources/**`, `pipelines/**`, `src/**` only trigger the Databricks deploy workflow.
 
