@@ -1,7 +1,6 @@
 import dlt
 from pyspark.sql import functions as F
 from pyspark.sql.window import Window
-# Reads raw tables, deduplictates and sets expectations
 
 S3_BUCKET = spark.conf.get("s3_bucket")
 
@@ -23,6 +22,9 @@ def silver_properties():
         .withColumn("first_scraped_at", F.min("scraped_at").over(w_all))
         .filter(F.col("row_num") == 1)
         .drop("row_num")
+        .withColumn("scraped_at", F.col("scraped_at").cast("date"))
+        .withColumn("first_scraped_at", F.col("first_scraped_at").cast("date"))
+        .withColumn("area_code", F.substring_index(F.col("postcode"), " ", 1))
     )
 
 
@@ -39,8 +41,8 @@ def silver_prices():
         .withColumn("row_num", F.row_number().over(w))
         .filter(F.col("row_num") == 1)
         .drop("row_num")
+        .withColumn("scraped_at", F.col("scraped_at").cast("date"))
     )
-
 
 
 @dlt.table(
@@ -55,4 +57,6 @@ def silver_spy_prices():
         .withColumn("row_num", F.row_number().over(w))
         .filter(F.col("row_num") == 1)
         .drop("row_num")
+        .withColumn("date", F.col("date").cast("date"))
+        .withColumn("loaded_at", F.col("loaded_at").cast("date"))
     )

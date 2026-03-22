@@ -9,12 +9,6 @@ SW_AREA_CODES = [
 ]
 
 
-def _extract_area_code(postcode_col):
-    """Extract area code (e.g. SW11) from a full postcode (e.g. SW11 1AA)."""
-    return F.substring_index(postcode_col, " ", 1)
-
-
-
 @dlt.table(name="gold_area_dim", comment="SW London area code reference table.")
 def gold_area_dim():
     district_map = {
@@ -40,7 +34,6 @@ def gold_property_fact():
 
     joined = (
         prices.join(props, "prop_id")
-        .withColumn("area_code", _extract_area_code(F.col("postcode")))
         .filter(F.col("area_code").isin(SW_AREA_CODES))
     )
 
@@ -71,12 +64,13 @@ def gold_current_properties():
     prices = dlt.read("silver_prices")
     props = dlt.read("silver_properties")
 
-    max_date = prices.agg(F.max("scraped_at")).collect()[0][0]
+    w = Window.partitionBy(F.lit(1))
 
     return (
-        prices.filter(F.col("scraped_at") == max_date)
+        prices.withColumn("max_date", F.max("scraped_at").over(w))
+        .filter(F.col("scraped_at") == F.col("max_date"))
+        .drop("max_date")
         .join(props, "prop_id")
-        .withColumn("area_code", _extract_area_code(F.col("postcode")))
         .withColumn(
             "area_code",
             F.when(F.col("area_code").isin(SW_AREA_CODES), F.col("area_code")),
