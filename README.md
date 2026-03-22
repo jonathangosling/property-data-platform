@@ -7,9 +7,9 @@ End-to-end rental market data pipeline for 2-bed properties in SW London.
 ```
 Rightmove / Bank of England / yfinance
         ↓
-Databricks Serverless Job (scrape + geocode + financials)
-        ↓
-Lakeflow Declarative Pipeline (bronze → silver → gold)
+Databricks Job — spot cluster (scrape + geocode + financials)
+        ↓  writes Delta tables to S3 landing zone
+Lakeflow Declarative Pipeline — serverless (silver → gold)
         ↓
 Delta tables on S3 (Unity Catalog)
         ↓
@@ -21,11 +21,17 @@ Streamlit dashboard (Streamlit Community Cloud)
 ## Repo structure
 
 ```
-terraform/        # AWS: S3 bucket, IAM roles; Databricks: UC credential, secret scope
-resources/        # DABs: pipeline.yml, job.yml
-pipelines/        # Lakeflow: bronze.py, silver.py, gold.py
-src/              # Python: scrape.py, financials.py
-docs/             # Setup notes
+terraform/                        # AWS: S3 bucket, IAM roles; Databricks: UC credential, secret scope
+resources/                        # DABs: pipeline.yml, job.yml
+pipelines/                        # Lakeflow: silver.py, gold.py
+src/
+  property_data_platform/         # Python wheel package
+    __init__.py
+    scrape.py                     # Rightmove scraper + reverse geocoder
+    financials.py                 # BoE interest rates + SPY price
+    ingest.py                     # Job entry point — orchestrates scrape and Delta writes
+setup.py                          # Wheel build config (entry point: ingest)
+docs/                             # Setup notes
 ```
 
 ## Resources
@@ -34,7 +40,7 @@ docs/             # Setup notes
 
 | Resource | Purpose |
 |---|---|
-| S3 bucket `property-data-platform-{account_id}` | Stores all Delta Lake tables (landing, bronze, silver, gold) |
+| S3 bucket `property-data-platform-{account_id}` | Stores all Delta Lake tables (landing, silver, gold) |
 | IAM role `property-data-platform-uc-storage` | Assumed by Databricks Unity Catalog to read/write the S3 bucket |
 | IAM user `property-data-platform-streamlit` | Read-only access to gold Delta tables for the Streamlit dashboard |
 
@@ -52,7 +58,7 @@ docs/             # Setup notes
 | Resource | Purpose |
 |---|---|
 | Lakeflow pipeline `property-data-platform-pipeline` | Serverless triggered pipeline — silver dedup, gold aggregations |
-| Job `property-data-platform-scrape` | Serverless job — scrapes Rightmove + financials, then triggers the pipeline |
+| Job `property-data-platform-scrape` | Spot cluster job — scrapes Rightmove + financials, writes landing Delta tables, then triggers the pipeline |
 
 ### Databricks (auto-provisioned)
 
@@ -80,17 +86,33 @@ docs/             # Setup notes
 cd property-data-platform
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
+pip install -e .
 ```
+
+Installing in editable mode (`-e .`) installs the `property_data_platform` package and all dependencies from `setup.py`.
 
 ### Testing the scraper
 
 ```bash
-cd src
-python scrape.py
+python -m property_data_platform.scrape
 ```
 
-This runs the full Rightmove scrape and prints a sample property and price record. No API keys or AWS credentials required — geocoding is skipped in local mode.
+Runs the full Rightmove scrape and prints a sample property and price record. No API keys or AWS credentials required — geocoding is skipped in local mode.
+
+### Python wheel
+
+The scrape job runs as a Python wheel task on Databricks. The wheel is built automatically by DABs at deploy time using:
+
+```bash
+python3 setup.py bdist_wheel
+```
+
+The entry point `ingest` (defined in `setup.py`) maps to `property_data_platform.ingest:main` and is invoked by the `python_wheel_task` with `--s3-bucket` as a parameter.
+
+References:
+- [Use a Python wheel file in Lakeflow Jobs](https://docs.databricks.com/aws/en/jobs/how-to/use-python-wheels-in-workflows)
+- [Build a Python wheel using Databricks Asset Bundles](https://docs.databricks.com/aws/en/dev-tools/bundles/python-wheel?language=Setuptools)
+- [Python wheel task in Databricks Jobs](https://docs.databricks.com/aws/en/jobs/python-wheel)
 
 ## Deployment
 
@@ -128,7 +150,7 @@ Set a calendar reminder before the 90-day expiry — CI/CD will fail silently if
 - **PR to main** — Terraform plan posted as PR comment; DABs bundle validated
 - **Merge to main** — Terraform applied; DABs bundle deployed to prod
 
-Changes to `terraform/**` only trigger Terraform workflows. Changes to `databricks.yml`, `resources/**`, `pipelines/**`, `src/**` only trigger the Databricks deploy workflow.
+Changes to `terraform/**` only trigger Terraform workflows. Changes to `databricks.yml`, `setup.py`, `resources/**`, `pipelines/**`, `src/**` only trigger the Databricks deploy workflow.
 
 ## Delta tables
 

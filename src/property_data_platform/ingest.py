@@ -16,8 +16,8 @@ from pyspark.sql.types import (
     FloatType, IntegerType, StringType, StructField, StructType,
 )
 
-from scrape import add_postcodes, scrape_rightmove
-from financials import get_interest_rates, get_spy_price
+from property_data_platform.scrape import add_postcodes, scrape_rightmove
+from property_data_platform.financials import get_interest_rates, get_spy_price
 
 log = logging.getLogger(__name__)
 

@@ -6,6 +6,12 @@ variables:
     description: S3 bucket name for Delta Lake storage
     default: ""
 
+artifacts:
+  property_data_platform_whl:
+    type: whl
+    build: python3 setup.py bdist_wheel
+    path: .
+
 include:
   - resources/*.yml
 
