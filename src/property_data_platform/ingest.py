@@ -9,7 +9,7 @@ Orchestrates the full ingest run:
 import argparse
 import logging
 import os
-from datetime import date, timedelta
+from datetime import date
 
 from pyspark.sql import SparkSession
 from pyspark.sql.types import (
@@ -17,7 +17,7 @@ from pyspark.sql.types import (
 )
 
 from property_data_platform.scrape import add_postcodes, scrape_rightmove
-from property_data_platform.financials import get_interest_rates, get_spy_price
+from property_data_platform.financials import get_spy_price
 
 log = logging.getLogger(__name__)
 
@@ -33,11 +33,6 @@ PRICES_SCHEMA = StructType([
     StructField("prop_id", IntegerType(), False),
     StructField("price", IntegerType(), False),
     StructField("scraped_at", StringType(), False),
-])
-INTEREST_RATES_SCHEMA = StructType([
-    StructField("date", StringType(), False),
-    StructField("rate", FloatType(), False),
-    StructField("loaded_at", StringType(), False),
 ])
 SPY_SCHEMA = StructType([
     StructField("date", StringType(), False),
@@ -99,14 +94,10 @@ def main() -> None:
             p["postcode"] = None
 
     # --- Financial data ---
-    to_date = date.today()
-    from_date = to_date - timedelta(days=7)
-    interest_rates = get_interest_rates(from_date, to_date)
     spy = get_spy_price()
 
     if args.dry_run:
-        log.info(f"[dry-run] {len(properties)} properties, {len(prices)} prices, "
-                 f"{len(interest_rates)} interest rates, spy={spy}")
+        log.info(f"[dry-run] {len(properties)} properties, {len(prices)} prices, spy={spy}")
         log.info(f"[dry-run] Sample property: {properties[0]}")
         log.info(f"[dry-run] Sample price:    {prices[0]}")
         return
@@ -114,8 +105,6 @@ def main() -> None:
     # --- Write to Delta landing tables ---
     _write_delta(properties, PROPERTIES_SCHEMA, f"{base}/properties", partition_by="scraped_at")
     _write_delta(prices, PRICES_SCHEMA, f"{base}/prices")
-    if interest_rates:
-        _write_delta(interest_rates, INTEREST_RATES_SCHEMA, f"{base}/interest_rates")
     if spy:
         _write_delta([spy], SPY_SCHEMA, f"{base}/spy_prices")
 

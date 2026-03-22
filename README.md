@@ -170,7 +170,6 @@ Changes to `terraform/**` only trigger Terraform workflows. Changes to `databric
 |---|---|---|
 | `landing/properties` | `s3://{bucket}/landing/properties` | Raw property records from Rightmove, partitioned by `scraped_at` |
 | `landing/prices` | `s3://{bucket}/landing/prices` | Raw price records from Rightmove |
-| `landing/interest_rates` | `s3://{bucket}/landing/interest_rates` | Bank of England SONIA rates |
 | `landing/spy_prices` | `s3://{bucket}/landing/spy_prices` | SPY ETF close prices |
 
 ### Pipeline (managed by Unity Catalog, registered under `main.property_data`)
@@ -179,7 +178,6 @@ Changes to `terraform/**` only trigger Terraform workflows. Changes to `databric
 |---|---|
 | `silver_properties` | Deduplicated property dimension — one row per `prop_id` |
 | `silver_prices` | Deduplicated price fact — one row per `prop_id` per date |
-| `silver_interest_rates` | Deduplicated SONIA rates — one row per date |
 | `silver_spy_prices` | Deduplicated SPY prices — one row per date |
 | `gold_property_fact` | Avg/median price and count by date and SW area code |
 | `gold_current_properties` | Snapshot of listings on the most recent scrape date |

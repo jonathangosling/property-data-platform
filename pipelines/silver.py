@@ -40,20 +40,6 @@ def silver_prices():
     )
 
 
-@dlt.table(
-    name="silver_interest_rates",
-    comment="Deduplicated Bank of England SONIA rates — one row per date.",
-    table_properties={"quality": "silver"},
-)
-def silver_interest_rates():
-    w = Window.partitionBy("date").orderBy(F.desc("loaded_at"))
-    return (
-        spark.read.format("delta").load(f"s3://{S3_BUCKET}/landing/interest_rates")
-        .withColumn("row_num", F.row_number().over(w))
-        .filter(F.col("row_num") == 1)
-        .drop("row_num")
-    )
-
 
 @dlt.table(
     name="silver_spy_prices",

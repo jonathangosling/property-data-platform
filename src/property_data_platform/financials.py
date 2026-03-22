@@ -13,34 +13,46 @@ import yfinance as yf
 log = logging.getLogger(__name__)
 
 BOE_URL = (
-    "https://www.bankofengland.co.uk/boeapps/iadb/fromshowcolumns.asp"
-    "?csv.x=yes"
-    "&Datefrom={d}%2F{m}%2F{y_from}"
-    "&Dateto={d_to}%2F{m_to}%2F{y_to}"
-    "&SeriesCodes=IUMSOIA&CSVF=TN&UsingCodes=Y&VPD=Y&VFD=N"
+    "https://www.bankofengland.co.uk/boeapps/database/fromshowcolumns.asp"
+    "?DAT=RNG"
+    "&FD={fd}&FM={fm}&FY={fy}"
+    "&TD={td}&TM={tm}&TY={ty}"
+    "&SeriesCodes=IUDSOIA&CSVF=TT&UsingCodes=Y&VPD=Y&VFD=N"
 )
 
 
 def get_interest_rates(from_date: date, to_date: date) -> list[dict]:
-    """Fetch SONIA rates between from_date and to_date from Bank of England."""
-    # BoE requires a prior page access to set cookies.
-    session = requests.Session()
-    session.get("https://www.bankofengland.co.uk/boeapps/iadb/")
+    """Fetch SONIA rates between from_date and to_date from Bank of England.
 
+    The BoE database page renders data in an HTML DataTable — the CSV button
+    is client-side only, so we parse the HTML table directly with pd.read_html.
+    """
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/120.0.0.0 Safari/537.36"
+        ),
+    }
     url = BOE_URL.format(
-        d=from_date.strftime("%d"),
-        m=from_date.strftime("%m"),
-        y_from=from_date.strftime("%Y"),
-        d_to=to_date.strftime("%d"),
-        m_to=to_date.strftime("%m"),
-        y_to=to_date.strftime("%Y"),
+        fd=from_date.strftime("%d"),
+        fm=from_date.strftime("%b"),
+        fy=from_date.strftime("%Y"),
+        td=to_date.strftime("%d"),
+        tm=to_date.strftime("%b"),
+        ty=to_date.strftime("%Y"),
     )
-    r = session.get(url)
+    r = requests.get(url, headers=headers)
     if r.status_code >= 300:
-        log.warning(f"BoE API returned {r.status_code} — skipping interest rates.")
+        log.warning(f"BoE request returned {r.status_code} — skipping interest rates.")
         return []
 
-    df = pd.read_csv(pd.io.common.StringIO(r.text))
+    tables = pd.read_html(pd.io.common.StringIO(r.text))
+    if not tables:
+        log.warning("No tables found in BoE response — skipping interest rates.")
+        return []
+
+    df = tables[0]
     loaded_at = str(date.today())
     records = []
     for _, row in df.iterrows():
@@ -65,6 +77,8 @@ def get_spy_price() -> dict | None:
         if df.empty:
             log.warning("yfinance returned empty data for SPY.")
             return None
+        if isinstance(df.columns, pd.MultiIndex):
+            df.columns = df.columns.droplevel(1)
         latest = df.sort_index().iloc[-1]
         return {
             "date": str(latest.name.date()),
