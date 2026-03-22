@@ -112,7 +112,7 @@ Runs the full Rightmove scrape and prints a sample property and price record. No
 ### Dry run (full pipeline without Delta writes)
 
 ```bash
-set -a; source .env; set +a && python -m property_data_platform.ingest --s3-bucket anything --dry-run
+source .env && python -m property_data_platform.ingest --s3-bucket anything --dry-run
 ```
 
 Runs the full ingest — scrape, geocode, and financial data fetch — but skips the Delta writes. Logs a summary of what would be written. Requires `GOOGLEMAPS_API_KEY` in `.env` for geocoding (omit to skip postcodes). No AWS credentials needed.
