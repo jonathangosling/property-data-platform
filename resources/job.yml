@@ -36,7 +36,7 @@ resources:
               - "--s3-bucket"
               - ${var.s3_bucket}
           libraries:
-            - whl: ./dist/*.whl
+            - whl: ../dist/*.whl
 
         - task_key: run_pipeline
           depends_on:
