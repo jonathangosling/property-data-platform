@@ -1,6 +1,9 @@
 bundle:
   name: property-data-platform
 
+experimental:
+  python_wheel_wrapper: true
+
 variables:
   s3_bucket:
     description: S3 bucket name for Delta Lake storage
