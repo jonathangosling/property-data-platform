@@ -134,22 +134,16 @@ spark.sql(f"""
 
 raw_spy = _read_landing("spy_prices")
 
-w_spy = Window.partitionBy("date").orderBy(F.desc("loaded_at"))
-
 incoming_spy = (
     raw_spy
-    .withColumn("row_num", F.row_number().over(w_spy))
-    .filter(F.col("row_num") == 1)
-    .drop("row_num")
+    .drop("loaded_at")
     .withColumn("date", F.col("date").cast("date"))
-    .withColumn("loaded_at", F.col("loaded_at").cast("date"))
 )
 
 spark.sql(f"""
     CREATE TABLE IF NOT EXISTS {CATALOG}.{DB}.silver_spy_prices (
         date DATE,
-        close FLOAT,
-        loaded_at DATE
+        close FLOAT
     )
     USING iceberg
     TBLPROPERTIES ('format-version' = '2')
