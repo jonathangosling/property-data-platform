@@ -14,8 +14,8 @@ import logging
 import os
 from datetime import date
 
-from scrape import add_postcodes, scrape_rightmove
-from financials import get_spy_price
+from property_data_platform.scrape import add_postcodes, scrape_rightmove
+from property_data_platform.financials import get_spy_price
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s — %(message)s")
 log = logging.getLogger(__name__)

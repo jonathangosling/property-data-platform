@@ -41,8 +41,8 @@ jobs:
           aws-region: us-east-1
 
       - name: Package shared modules
-        working-directory: property-data-platform/src/property_data_platform
-        run: zip shared.zip scrape.py financials.py
+        working-directory: property-data-platform/src
+        run: zip -r shared.zip property_data_platform/
 
       - name: Upload Glue scripts to S3
         run: |
@@ -51,4 +51,4 @@ jobs:
           aws s3 cp property-data-platform/glue/ingest.py  ${PREFIX}/ingest.py
           aws s3 cp property-data-platform/glue/silver.py  ${PREFIX}/silver.py
           aws s3 cp property-data-platform/glue/gold.py    ${PREFIX}/gold.py
-          aws s3 cp property-data-platform/src/property_data_platform/shared.zip ${PREFIX}/shared.zip
+          aws s3 cp property-data-platform/src/shared.zip ${PREFIX}/shared.zip
