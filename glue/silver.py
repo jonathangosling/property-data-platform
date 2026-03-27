@@ -82,7 +82,14 @@ incoming_properties.createOrReplaceTempView("incoming_properties_vw")
 spark.sql(f"""
     MERGE INTO {CATALOG}.{DB}.silver_properties t
     USING incoming_properties_vw s ON t.prop_id = s.prop_id
-    WHEN MATCHED AND s.scraped_at > t.scraped_at THEN UPDATE SET *
+    WHEN MATCHED AND s.scraped_at > t.scraped_at THEN UPDATE SET
+        t.address = s.address,
+        t.latitude = s.latitude,
+        t.longitude = s.longitude,
+        t.postcode = s.postcode,
+        t.scraped_at = s.scraped_at,
+        t.area_code = s.area_code,
+        t.first_scraped_at = LEAST(t.first_scraped_at, s.first_scraped_at)
     WHEN NOT MATCHED THEN INSERT *
 """)
 
