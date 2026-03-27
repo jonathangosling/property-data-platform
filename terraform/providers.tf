@@ -6,18 +6,9 @@ terraform {
       source  = "hashicorp/aws"
       version = "~> 5.0"
     }
-    databricks = {
-      source  = "databricks/databricks"
-      version = "~> 1.0"
-    }
-    null = {
-      source  = "hashicorp/null"
-      version = "~> 3.0"
-    }
-    time = {
-      source  = "hashicorp/time"
-      version = "~> 0.9"
-    }
+    # databricks = { source = "databricks/databricks", version = "~> 1.0" }  # decommissioned
+    # null       = { source = "hashicorp/null",         version = "~> 3.0" }  # decommissioned
+    # time       = { source = "hashicorp/time",         version = "~> 0.9" }  # decommissioned
   }
 
   backend "s3" {
@@ -38,8 +29,4 @@ provider "aws" {
   }
 }
 
-# TODO: Remove databricks, null, and time providers once Databricks resources are torn down.
-provider "databricks" {
-  host  = var.databricks_host
-  token = var.databricks_token
-}
+# provider "databricks" { ... }  # decommissioned
