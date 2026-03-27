@@ -68,17 +68,17 @@ joined = (
     .filter(F.col("area_code").isin(SW_AREA_CODES))
 )
 
-area_agg = joined.groupBy("scraped_at", "area_code").agg(
+area_agg = joined.groupBy("date", "area_code").agg(
     F.avg("price").cast("int").alias("avg_price"),
     F.percentile_approx("price", 0.5).cast("int").alias("median_price"),
     F.count("*").alias("num_properties"),
-).withColumnRenamed("scraped_at", "date")
+)
 
-all_agg = prices.groupBy("scraped_at").agg(
+all_agg = prices.groupBy("date").agg(
     F.avg("price").cast("int").alias("avg_price"),
     F.percentile_approx("price", 0.5).cast("int").alias("median_price"),
     F.count("*").alias("num_properties"),
-).withColumnRenamed("scraped_at", "date").withColumn("area_code", F.lit("all"))
+).withColumn("area_code", F.lit("all"))
 
 gold_property_fact = (
     area_agg.unionByName(all_agg)
@@ -107,8 +107,8 @@ gold_property_fact.writeTo(f"{CATALOG}.{DB}.gold_property_fact").overwritePartit
 w = Window.partitionBy(F.lit(1))
 
 gold_current = (
-    prices.withColumn("max_date", F.max("scraped_at").over(w))
-    .filter(F.col("scraped_at") == F.col("max_date"))
+    prices.withColumn("max_date", F.max("date").over(w))
+    .filter(F.col("date") == F.col("max_date"))
     .drop("max_date")
     .join(props, "prop_id")
     .withColumn(
@@ -117,7 +117,7 @@ gold_current = (
     )
     .select(
         "prop_id", "address", "postcode", "latitude", "longitude",
-        "area_code", "price", "scraped_at",
+        "area_code", "price", "date",
     )
 )
 
@@ -130,7 +130,7 @@ spark.sql(f"""
         longitude FLOAT,
         area_code STRING,
         price INT,
-        scraped_at DATE
+        date DATE
     )
     USING iceberg
 """)

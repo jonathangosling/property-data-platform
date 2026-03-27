@@ -100,7 +100,7 @@ spark.sql(f"""
 
 raw_prices = _read_landing("prices")
 
-w_price = Window.partitionBy("prop_id", "scraped_at").orderBy(F.desc("scraped_at"))
+w_price = Window.partitionBy("prop_id", "scraped_at").orderBy(F.desc("scraped_at"))  # raw col, renamed to date after
 
 incoming_prices = (
     raw_prices
@@ -108,13 +108,14 @@ incoming_prices = (
     .filter(F.col("row_num") == 1)
     .drop("row_num")
     .withColumn("scraped_at", F.col("scraped_at").cast("date"))
+    .withColumnRenamed("scraped_at", "date")
 )
 
 spark.sql(f"""
     CREATE TABLE IF NOT EXISTS {CATALOG}.{DB}.silver_prices (
         prop_id INT,
         price INT,
-        scraped_at DATE
+        date DATE
     )
     USING iceberg
     TBLPROPERTIES ('format-version' = '2', 'write.target-file-size-bytes' = '134217728')
@@ -123,7 +124,7 @@ spark.sql(f"""
 incoming_prices.createOrReplaceTempView("incoming_prices_vw")
 spark.sql(f"""
     MERGE INTO {CATALOG}.{DB}.silver_prices t
-    USING incoming_prices_vw s ON t.prop_id = s.prop_id AND t.scraped_at = s.scraped_at
+    USING incoming_prices_vw s ON t.prop_id = s.prop_id AND t.date = s.date
     WHEN NOT MATCHED THEN INSERT *
 """)
 
