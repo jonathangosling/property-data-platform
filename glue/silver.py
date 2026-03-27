@@ -76,7 +76,7 @@ spark.sql(f"""
         area_code STRING
     )
     USING iceberg
-    TBLPROPERTIES ('format-version' = '2', 'write.target-file-size-bytes' = '134217728')
+    TBLPROPERTIES ('format-version' = '2')
 """)
 
 incoming_properties.createOrReplaceTempView("incoming_properties_vw")
@@ -118,7 +118,7 @@ spark.sql(f"""
         date DATE
     )
     USING iceberg
-    TBLPROPERTIES ('format-version' = '2', 'write.target-file-size-bytes' = '134217728')
+    TBLPROPERTIES ('format-version' = '2')
 """)
 
 incoming_prices.createOrReplaceTempView("incoming_prices_vw")
