@@ -36,7 +36,7 @@ resource "aws_glue_job" "ingest" {
   }
 
   max_capacity = 0.0625 # cheapest Python Shell tier
-  timeout      = 30 # minutes
+  timeout      = 30     # minutes
 }
 
 resource "aws_glue_job" "silver" {
@@ -51,12 +51,12 @@ resource "aws_glue_job" "silver" {
   }
 
   default_arguments = {
-    "--landing_path"              = local.landing_path
-    "--catalog_database"          = aws_glue_catalog_database.property_data.name
-    "--job-bookmark-option"       = "job-bookmark-enable"
-    "--enable-glue-datacatalog"   = "true"
-    "--datalake-formats"          = "iceberg"
-    "--conf"                      = "spark.sql.extensions=org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions --conf spark.sql.catalog.glue_catalog=org.apache.iceberg.spark.SparkCatalog --conf spark.sql.catalog.glue_catalog.warehouse=${local.iceberg_path} --conf spark.sql.catalog.glue_catalog.type=glue"
+    "--landing_path"            = local.landing_path
+    "--catalog_database"        = aws_glue_catalog_database.property_data.name
+    "--job-bookmark-option"     = "job-bookmark-enable"
+    "--enable-glue-datacatalog" = "true"
+    "--datalake-formats"        = "iceberg"
+    "--conf"                    = "spark.sql.extensions=org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions --conf spark.sql.catalog.glue_catalog=org.apache.iceberg.spark.SparkCatalog --conf spark.sql.catalog.glue_catalog.warehouse=${local.iceberg_path} --conf spark.sql.catalog.glue_catalog.type=glue"
   }
 
   number_of_workers = 2
@@ -76,9 +76,9 @@ resource "aws_glue_job" "gold" {
   }
 
   default_arguments = {
-    "--catalog_database"          = aws_glue_catalog_database.property_data.name
-    "--enable-glue-datacatalog"   = "true"
-    "--datalake-formats"          = "iceberg"
+    "--catalog_database"        = aws_glue_catalog_database.property_data.name
+    "--enable-glue-datacatalog" = "true"
+    "--datalake-formats"        = "iceberg"
   }
 
   number_of_workers = 2
