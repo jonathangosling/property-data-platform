@@ -35,8 +35,7 @@ If the Glue ETL jobs fail to resolve the `glue_catalog` catalog, the full explic
 spark.sql.extensions=org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions
 spark.sql.catalog.glue_catalog=org.apache.iceberg.spark.SparkCatalog
 spark.sql.catalog.glue_catalog.warehouse=s3://{bucket}/iceberg
-spark.sql.catalog.glue_catalog.catalog-impl=org.apache.iceberg.aws.glue.GlueCatalog
-spark.sql.catalog.glue_catalog.io-impl=org.apache.iceberg.aws.s3.S3FileIO
+spark.sql.catalog.glue_catalog.type=glue
 ```
 
 Add as `--conf` in `glue.tf` for the silver and gold jobs.
