@@ -8,15 +8,12 @@ Orchestrates the full ingest run:
 
 Expects scrape.py and financials.py to be co-deployed via --extra-py-files.
 """
-import json
 import logging
 import sys
 from datetime import date
 
 import boto3
 import pandas as pd
-import pyarrow as pa
-import pyarrow.parquet as pq
 
 from awsglue.utils import getResolvedOptions
 
@@ -49,14 +46,7 @@ def _write_parquet(records: list[dict], s3_path: str, today: date) -> None:
     partition = f"year={today.year}/month={today.month:02d}/day={today.day:02d}"
     full_path = f"{s3_path}/{partition}/part-0.parquet"
 
-    df = pd.DataFrame(records)
-    buf = pa.BufferOutputStream()
-    pq.write_table(pa.Table.from_pandas(df, preserve_index=False), buf)
-
-    # Strip s3:// and split into bucket + key
-    without_scheme = full_path[len("s3://"):]
-    bucket, key = without_scheme.split("/", 1)
-    boto3.client("s3").put_object(Bucket=bucket, Key=key, Body=buf.getvalue().to_pybytes())
+    pd.DataFrame(records).to_parquet(full_path, index=False)
     log.info(f"Wrote {len(records)} records to {full_path}")
 
 

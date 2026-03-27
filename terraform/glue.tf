@@ -30,7 +30,7 @@ resource "aws_glue_job" "ingest" {
   default_arguments = {
     "--landing_path"              = local.landing_path
     "--secret_name"               = aws_secretsmanager_secret.googlemaps_api_key.name
-    "--additional-python-modules" = "requests,beautifulsoup4,yfinance,pandas,pyarrow"
+    "--additional-python-modules" = "requests,beautifulsoup4,yfinance,pandas,s3fs"
     "--extra-py-files"            = "${local.glue_scripts_path}/shared.zip"
     "--enable-job-insights"       = "false"
   }
