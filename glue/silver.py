@@ -51,7 +51,7 @@ raw_properties = _read_landing("properties")
 w = Window.partitionBy("prop_id").orderBy(F.desc("scraped_at"))
 w_all = Window.partitionBy("prop_id")
 
-silver_properties = (
+incoming_properties = (
     raw_properties
     .withColumn("row_num", F.row_number().over(w))
     .withColumn("first_scraped_at", F.min("scraped_at").over(w_all))
@@ -78,10 +78,10 @@ spark.sql(f"""
     TBLPROPERTIES ('format-version' = '2', 'write.target-file-size-bytes' = '134217728')
 """)
 
-silver_properties.createOrReplaceTempView("incoming_properties")
+incoming_properties.createOrReplaceTempView("incoming_properties_vw")
 spark.sql(f"""
     MERGE INTO {CATALOG}.{DB}.silver_properties t
-    USING incoming_properties s ON t.prop_id = s.prop_id
+    USING incoming_properties_vw s ON t.prop_id = s.prop_id
     WHEN MATCHED AND s.scraped_at > t.scraped_at THEN UPDATE SET *
     WHEN NOT MATCHED THEN INSERT *
 """)
@@ -94,7 +94,7 @@ raw_prices = _read_landing("prices")
 
 w_price = Window.partitionBy("prop_id", "scraped_at").orderBy(F.desc("scraped_at"))
 
-silver_prices = (
+incoming_prices = (
     raw_prices
     .withColumn("row_num", F.row_number().over(w_price))
     .filter(F.col("row_num") == 1)
@@ -112,10 +112,10 @@ spark.sql(f"""
     TBLPROPERTIES ('format-version' = '2', 'write.target-file-size-bytes' = '134217728')
 """)
 
-silver_prices.createOrReplaceTempView("incoming_prices")
+incoming_prices.createOrReplaceTempView("incoming_prices_vw")
 spark.sql(f"""
     MERGE INTO {CATALOG}.{DB}.silver_prices t
-    USING incoming_prices s ON t.prop_id = s.prop_id AND t.scraped_at = s.scraped_at
+    USING incoming_prices_vw s ON t.prop_id = s.prop_id AND t.scraped_at = s.scraped_at
     WHEN NOT MATCHED THEN INSERT *
 """)
 
@@ -127,7 +127,7 @@ raw_spy = _read_landing("spy_prices")
 
 w_spy = Window.partitionBy("date").orderBy(F.desc("loaded_at"))
 
-silver_spy = (
+incoming_spy = (
     raw_spy
     .withColumn("row_num", F.row_number().over(w_spy))
     .filter(F.col("row_num") == 1)
@@ -146,10 +146,10 @@ spark.sql(f"""
     TBLPROPERTIES ('format-version' = '2')
 """)
 
-silver_spy.createOrReplaceTempView("incoming_spy")
+incoming_spy.createOrReplaceTempView("incoming_spy_vw")
 spark.sql(f"""
     MERGE INTO {CATALOG}.{DB}.silver_spy_prices t
-    USING incoming_spy s ON t.date = s.date
+    USING incoming_spy_vw s ON t.date = s.date
     WHEN NOT MATCHED THEN INSERT *
 """)
 
