@@ -36,7 +36,7 @@ resource "aws_glue_job" "ingest" {
   }
 
   max_capacity = 0.0625 # cheapest Python Shell tier
-  timeout      = 10    # minutes — scrape + one S3 write should complete well within this
+  timeout      = 30 # minutes
 }
 
 resource "aws_glue_job" "silver" {
