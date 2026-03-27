@@ -30,3 +30,8 @@ Interest rate data (BoE SONIA) was removed. To be re-added via FRED API — requ
 ## Glue Data Quality
 
 Glue Data Quality (DQDL) can be used to add data quality expectations to silver tables, replacing the DLT `@dlt.expect` annotations. Worth adding once the pipeline is stable.
+
+Suggested rules for `silver_properties`:
+- `IsComplete "postcode"` — flag null postcodes (geocoding failures)
+- `IsComplete "prop_id"` — no null IDs
+- `CustomSql "SELECT COUNT_IF(area_code IS NULL OR area_code NOT IN ('SW1','SW2',...)) / COUNT(*) FROM primary < 0.05"` — alert if more than 5% of properties are outside SW area codes, which would indicate a geocoding issue or a change to the Rightmove search results

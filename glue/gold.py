@@ -111,10 +111,7 @@ gold_current = (
     .filter(F.col("date") == F.col("max_date"))
     .drop("max_date")
     .join(props, "prop_id")
-    .withColumn(
-        "area_code",
-        F.when(F.col("area_code").isin(SW_AREA_CODES), F.col("area_code")),
-    )
+    .filter(F.col("area_code").isin(SW_AREA_CODES))
     .select(
         "prop_id", "address", "postcode", "latitude", "longitude",
         "area_code", "price", "date",
