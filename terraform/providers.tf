@@ -38,6 +38,7 @@ provider "aws" {
   }
 }
 
+# TODO: Remove databricks, null, and time providers once Databricks resources are torn down.
 provider "databricks" {
   host  = var.databricks_host
   token = var.databricks_token

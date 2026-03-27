@@ -1,3 +1,7 @@
+# TODO: Remove unity_catalog_s3 role, null_resource.unity_catalog_s3_self_trust, and
+# aws_iam_role_policy.unity_catalog_s3 — Databricks decommissioned, migrating to AWS Glue.
+# Replace with a Glue execution role (see glue.tf once created).
+
 # IAM role for Unity Catalog storage credential — allows Databricks to access S3.
 # Created without the self-referential trust (AWS rejects forward references to roles
 # that don't exist yet). The self-referential trust is added after creation via
@@ -104,7 +108,7 @@ resource "aws_iam_user_policy" "streamlit_reader" {
       ]
       Resource = [
         aws_s3_bucket.delta_lake.arn,
-        "${aws_s3_bucket.delta_lake.arn}/delta/gold_*"
+        "${aws_s3_bucket.delta_lake.arn}/iceberg/gold_*"
       ]
     }]
   })

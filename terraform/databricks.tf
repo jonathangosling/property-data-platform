@@ -1,3 +1,5 @@
+# TODO: Remove this entire file — Databricks decommissioned, migrating to AWS Glue.
+
 # Wait for IAM trust policy changes to propagate before Databricks validates the role.
 resource "time_sleep" "wait_for_iam_propagation" {
   depends_on      = [null_resource.unity_catalog_s3_self_trust]

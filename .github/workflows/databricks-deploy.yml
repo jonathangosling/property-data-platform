@@ -1,27 +1,9 @@
+# TODO: Remove this workflow — Databricks decommissioned, migrating to AWS Glue.
+# Triggers disabled; kept for reference only.
 name: Databricks Deploy
 
 on:
   workflow_dispatch:
-  pull_request:
-    branches:
-      - main
-    paths:
-      - 'databricks.yml'
-      - 'setup.py'
-      - 'resources/**'
-      - 'pipelines/**'
-      - 'src/**'
-      - 'tests/**'
-  push:
-    branches:
-      - main
-    paths:
-      - 'databricks.yml'
-      - 'setup.py'
-      - 'resources/**'
-      - 'pipelines/**'
-      - 'src/**'
-      - 'tests/**'
 
 jobs:
   test:

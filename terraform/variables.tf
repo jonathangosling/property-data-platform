@@ -4,6 +4,7 @@ variable "aws_region" {
   default     = "us-east-1"
 }
 
+# TODO: Remove databricks_host, databricks_token, databricks_account_id once Databricks resources are torn down.
 variable "databricks_host" {
   description = "Databricks workspace URL (e.g. https://xxxxx.azuredatabricks.net)"
   type        = string
