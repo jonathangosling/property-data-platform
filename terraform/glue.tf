@@ -17,11 +17,10 @@ resource "aws_glue_catalog_database" "property_data" {
 # ---------------------------------------------------------------------------
 
 resource "aws_glue_job" "ingest" {
-  name         = "property-data-platform-ingest"
-  role_arn     = aws_iam_role.glue_execution.arn
-  glue_version = "4.0"
+  name     = "property-data-platform-ingest"
+  role_arn = aws_iam_role.glue_execution.arn
 
-  # Python Shell (no Spark) — lightweight scrape job
+  # Python Shell (no Spark) — glue_version not set, not applicable for pythonshell
   command {
     name            = "pythonshell"
     python_version  = "3.9"
@@ -36,7 +35,8 @@ resource "aws_glue_job" "ingest" {
     "--enable-job-insights"       = "false"
   }
 
-  max_capacity = 0.0625 # 1 DPU = cheapest Python Shell tier
+  max_capacity = 0.0625 # cheapest Python Shell tier
+  timeout      = 10    # minutes — scrape + one S3 write should complete well within this
 }
 
 resource "aws_glue_job" "silver" {
@@ -62,6 +62,7 @@ resource "aws_glue_job" "silver" {
 
   number_of_workers = 2
   worker_type       = "G.1X"
+  timeout           = 30 # minutes
 }
 
 resource "aws_glue_job" "gold" {
@@ -85,6 +86,7 @@ resource "aws_glue_job" "gold" {
 
   number_of_workers = 2
   worker_type       = "G.1X"
+  timeout           = 30 # minutes
 }
 
 # ---------------------------------------------------------------------------
