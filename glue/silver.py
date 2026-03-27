@@ -42,23 +42,6 @@ def _read_landing(dataset: str):
     ).toDF()
 
 
-def _write_iceberg(df, table: str) -> None:
-    spark.sql(f"""
-        CREATE TABLE IF NOT EXISTS {CATALOG}.{DB}.{table}
-        USING iceberg
-        TBLPROPERTIES ('format-version' = '2')
-        AS SELECT * FROM {{df_tmp}}
-    """.replace("{df_tmp}", "dummy"))  # placeholder — real write below
-
-    df.createOrReplaceTempView("incoming")
-    spark.sql(f"""
-        MERGE INTO {CATALOG}.{DB}.{table} t
-        USING incoming s ON t.prop_id = s.prop_id
-        WHEN MATCHED AND s.scraped_at > t.scraped_at THEN UPDATE SET *
-        WHEN NOT MATCHED THEN INSERT *
-    """)
-
-
 # ---------------------------------------------------------------------------
 # silver_properties — one row per prop_id (latest scrape wins)
 # ---------------------------------------------------------------------------
