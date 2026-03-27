@@ -7,15 +7,15 @@ Orchestrates the full ingest run:
   3. Write Parquet to S3 landing zone with year=/month=/day= partitioning
 
 Expects scrape.py and financials.py to be co-deployed via --extra-py-files.
+Supports --dry-run for local testing (skips S3 writes, falls back to env var for API key).
 """
+import argparse
 import logging
-import sys
+import os
 from datetime import date
 
 import boto3
 import pandas as pd
-
-from awsglue.utils import getResolvedOptions
 
 from scrape import add_postcodes, scrape_rightmove
 from financials import get_spy_price
@@ -23,18 +23,14 @@ from financials import get_spy_price
 logging.basicConfig(level=logging.INFO, format="%(levelname)s — %(message)s")
 log = logging.getLogger(__name__)
 
-args = getResolvedOptions(sys.argv, ["landing_path", "secret_name"])
-LANDING_PATH = args["landing_path"].rstrip("/")
-SECRET_NAME = args["secret_name"]
 
-
-def _get_api_key() -> str | None:
+def _get_api_key(secret_name: str) -> str | None:
     try:
         client = boto3.client("secretsmanager")
-        return client.get_secret_value(SecretId=SECRET_NAME)["SecretString"]
-    except Exception as e:
-        log.warning(f"Could not retrieve API key from Secrets Manager: {e}")
-        return None
+        return client.get_secret_value(SecretId=secret_name)["SecretString"]
+    except Exception:
+        pass
+    return os.environ.get("GOOGLEMAPS_API_KEY")
 
 
 def _write_parquet(records: list[dict], s3_path: str, today: date) -> None:
@@ -51,13 +47,20 @@ def _write_parquet(records: list[dict], s3_path: str, today: date) -> None:
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--landing_path", required=True)
+    parser.add_argument("--secret_name", required=True)
+    parser.add_argument("--dry-run", action="store_true", help="Skip S3 writes — for local testing")
+    args = parser.parse_args()
+
+    landing_path = args.landing_path.rstrip("/")
     today = date.today()
 
     # --- Rightmove scrape ---
     properties, prices = scrape_rightmove()
 
     # --- Reverse geocode ---
-    api_key = _get_api_key()
+    api_key = _get_api_key(args.secret_name)
     if api_key:
         properties = add_postcodes(properties, api_key)
     else:
@@ -68,11 +71,17 @@ def main() -> None:
     # --- Financial data ---
     spy = get_spy_price()
 
+    if args.dry_run:
+        log.info(f"[dry-run] {len(properties)} properties, {len(prices)} prices, spy={spy}")
+        log.info(f"[dry-run] Sample property: {properties[0]}")
+        log.info(f"[dry-run] Sample price:    {prices[0]}")
+        return
+
     # --- Write to S3 landing zone ---
-    _write_parquet(properties, f"{LANDING_PATH}/properties", today)
-    _write_parquet(prices, f"{LANDING_PATH}/prices", today)
+    _write_parquet(properties, f"{landing_path}/properties", today)
+    _write_parquet(prices, f"{landing_path}/prices", today)
     if spy:
-        _write_parquet([spy], f"{LANDING_PATH}/spy_prices", today)
+        _write_parquet([spy], f"{landing_path}/spy_prices", today)
 
 
 if __name__ == "__main__":
