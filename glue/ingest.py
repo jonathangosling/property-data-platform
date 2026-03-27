@@ -14,9 +14,6 @@ import logging
 import os
 from datetime import date
 
-import boto3
-import pandas as pd
-
 from scrape import add_postcodes, scrape_rightmove
 from financials import get_spy_price
 
@@ -26,6 +23,7 @@ log = logging.getLogger(__name__)
 
 def _get_api_key(secret_name: str) -> str | None:
     try:
+        import boto3
         client = boto3.client("secretsmanager")
         return client.get_secret_value(SecretId=secret_name)["SecretString"]
     except Exception:
@@ -42,6 +40,7 @@ def _write_parquet(records: list[dict], s3_path: str, today: date) -> None:
     partition = f"year={today.year}/month={today.month:02d}/day={today.day:02d}"
     full_path = f"{s3_path}/{partition}/part-0.parquet"
 
+    import pandas as pd
     pd.DataFrame(records).to_parquet(full_path, index=False)
     log.info(f"Wrote {len(records)} records to {full_path}")
 
