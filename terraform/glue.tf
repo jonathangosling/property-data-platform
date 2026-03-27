@@ -42,7 +42,7 @@ resource "aws_glue_job" "ingest" {
 resource "aws_glue_job" "silver" {
   name         = "property-data-platform-silver"
   role_arn     = aws_iam_role.glue_execution.arn
-  glue_version = "4.0"
+  glue_version = "5.0"
 
   command {
     name            = "glueetl"
@@ -68,7 +68,7 @@ resource "aws_glue_job" "silver" {
 resource "aws_glue_job" "gold" {
   name         = "property-data-platform-gold"
   role_arn     = aws_iam_role.glue_execution.arn
-  glue_version = "4.0"
+  glue_version = "5.0"
 
   command {
     name            = "glueetl"
