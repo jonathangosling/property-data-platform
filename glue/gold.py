@@ -14,7 +14,7 @@ from pyspark.context import SparkContext
 from pyspark.sql import functions as F
 from pyspark.sql.window import Window
 
-args = getResolvedOptions(sys.argv, ["JOB_NAME", "iceberg_path", "catalog_database"])
+args = getResolvedOptions(sys.argv, ["JOB_NAME", "catalog_database"])
 
 sc = SparkContext()
 glueContext = GlueContext(sc)
