@@ -54,12 +54,13 @@ w_all = Window.partitionBy("prop_id")
 incoming_properties = (
     raw_properties
     .withColumn("row_num", F.row_number().over(w))
-    .withColumn("first_scraped_at", F.min("scraped_at").over(w_all))
+    .withColumn("first_seen", F.min("scraped_at").over(w_all))
     .filter(F.col("row_num") == 1)
     .drop("row_num")
     .withColumn("scraped_at", F.col("scraped_at").cast("date"))
-    .withColumn("first_scraped_at", F.col("first_scraped_at").cast("date"))
+    .withColumn("first_seen", F.col("first_seen").cast("date"))
     .withColumn("area_code", F.substring_index(F.col("postcode"), " ", 1))
+    .withColumnRenamed("scraped_at", "last_seen")
 )
 
 spark.sql(f"CREATE DATABASE IF NOT EXISTS {CATALOG}.{DB}")
@@ -70,8 +71,8 @@ spark.sql(f"""
         latitude FLOAT,
         longitude FLOAT,
         postcode STRING,
-        scraped_at DATE,
-        first_scraped_at DATE,
+        last_seen DATE,
+        first_seen DATE,
         area_code STRING
     )
     USING iceberg
@@ -82,14 +83,14 @@ incoming_properties.createOrReplaceTempView("incoming_properties_vw")
 spark.sql(f"""
     MERGE INTO {CATALOG}.{DB}.silver_properties t
     USING incoming_properties_vw s ON t.prop_id = s.prop_id
-    WHEN MATCHED AND s.scraped_at > t.scraped_at THEN UPDATE SET
+    WHEN MATCHED AND s.last_seen > t.last_seen THEN UPDATE SET
         t.address = s.address,
         t.latitude = s.latitude,
         t.longitude = s.longitude,
         t.postcode = s.postcode,
-        t.scraped_at = s.scraped_at,
+        t.last_seen = s.last_seen,
         t.area_code = s.area_code,
-        t.first_scraped_at = LEAST(t.first_scraped_at, s.first_scraped_at)
+        t.first_seen = LEAST(t.first_seen, s.first_seen)
     WHEN NOT MATCHED THEN INSERT *
 """)
 
