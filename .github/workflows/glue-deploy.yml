@@ -6,8 +6,8 @@ on:
       - main
     paths:
       - 'glue/**'
-      - 'src/property_data_platform/scrape.py'
-      - 'src/property_data_platform/financials.py'
+      - 'src/scrape.py'
+      - 'src/financials.py'
 
 jobs:
   test:
@@ -20,10 +20,10 @@ jobs:
           python-version: "3.11"
       - name: Install dependencies
         working-directory: property-data-platform
-        run: pip install -e ".[test]"
+        run: pip install -r requirements.txt
       - name: Run tests
         working-directory: property-data-platform
-        run: python -m pytest tests/ -v
+        run: PYTHONPATH=src python -m pytest tests/ -v
 
   deploy:
     name: Upload Glue Scripts
@@ -42,7 +42,7 @@ jobs:
 
       - name: Package shared modules
         working-directory: property-data-platform/src
-        run: zip -r shared.zip property_data_platform/
+        run: zip shared.zip scrape.py financials.py
 
       - name: Upload Glue scripts to S3
         run: |

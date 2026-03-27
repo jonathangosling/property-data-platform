@@ -1,6 +1,6 @@
 import pytest
 
-from property_data_platform.scrape import _parse_page, PARSE_FAILURE_THRESHOLD
+from scrape import _parse_page, PARSE_FAILURE_THRESHOLD
 
 
 def _make_prop(prop_id=1, price=2000, address="1 Test St", lat=51.5, lng=-0.1):
