@@ -1,6 +1,8 @@
+from unittest.mock import patch
+
 import pytest
 
-from scrape import _parse_page, PARSE_FAILURE_THRESHOLD
+from scrape import _parse_page, add_postcodes, PARSE_FAILURE_THRESHOLD, POSTCODE_MISSING_THRESHOLD
 
 
 def _make_prop(prop_id=1, price=2000, address="1 Test St", lat=51.5, lng=-0.1):
@@ -80,3 +82,39 @@ def test_failure_rate_at_threshold_passes():
     bad = [{"id": str(i)} for i in range(n_bad)]
     properties, _ = _parse_page({"properties": good + bad}, SCRAPED_AT, page_index=0)
     assert len(properties) == total - n_bad
+
+
+# ---------------------------------------------------------------------------
+# add_postcodes
+# ---------------------------------------------------------------------------
+
+def _make_parsed_prop(prop_id=1, lat=51.5, lng=-0.1):
+    return {"prop_id": prop_id, "latitude": lat, "longitude": lng}
+
+
+def test_add_postcodes_all_found():
+    props = [_make_parsed_prop(i) for i in range(10)]
+    with patch("scrape.reverse_geocode", return_value="SW1A 1AA"):
+        result = add_postcodes(props, api_key="key")
+    assert all(p["postcode"] == "SW1A 1AA" for p in result)
+
+
+def test_add_postcodes_missing_at_threshold_passes():
+    # Exactly at threshold — should not raise (threshold is strictly greater than)
+    total = 100
+    n_missing = int(total * POSTCODE_MISSING_THRESHOLD)
+    props = [_make_parsed_prop(i) for i in range(total)]
+    returns = [None] * n_missing + ["SW1A 1AA"] * (total - n_missing)
+    with patch("scrape.reverse_geocode", side_effect=returns):
+        result = add_postcodes(props, api_key="key")
+    assert sum(1 for p in result if p["postcode"] is None) == n_missing
+
+
+def test_add_postcodes_missing_above_threshold_raises():
+    total = 100
+    n_missing = int(total * POSTCODE_MISSING_THRESHOLD) + 1
+    props = [_make_parsed_prop(i) for i in range(total)]
+    returns = [None] * n_missing + ["SW1A 1AA"] * (total - n_missing)
+    with patch("scrape.reverse_geocode", side_effect=returns):
+        with pytest.raises(RuntimeError, match="Missing postcode rate"):
+            add_postcodes(props, api_key="key")

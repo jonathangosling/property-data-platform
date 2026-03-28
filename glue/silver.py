@@ -87,9 +87,9 @@ spark.sql(f"""
         t.address = s.address,
         t.latitude = s.latitude,
         t.longitude = s.longitude,
-        t.postcode = s.postcode,
+        t.postcode = COALESCE(s.postcode, t.postcode),
         t.last_seen = s.last_seen,
-        t.area_code = s.area_code,
+        t.area_code = COALESCE(s.area_code, t.area_code),
         t.first_seen = LEAST(t.first_seen, s.first_seen)
     WHEN NOT MATCHED THEN INSERT *
 """)
