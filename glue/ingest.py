@@ -15,7 +15,6 @@ import os
 from datetime import date
 
 from scrape import add_postcodes, scrape_rightmove
-from financials import get_spy_price
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s — %(message)s")
 log = logging.getLogger(__name__)
@@ -67,11 +66,8 @@ def main() -> None:
         for p in properties:
             p["postcode"] = None
 
-    # --- Financial data ---
-    spy = get_spy_price()
-
     if args.dry_run:
-        log.info(f"[dry-run] {len(properties)} properties, {len(prices)} prices, spy={spy}")
+        log.info(f"[dry-run] {len(properties)} properties, {len(prices)} prices")
         log.info(f"[dry-run] Sample property: {properties[0]}")
         log.info(f"[dry-run] Sample price:    {prices[0]}")
         return
@@ -79,8 +75,6 @@ def main() -> None:
     # --- Write to S3 landing zone ---
     _write_parquet(properties, f"{landing_path}/properties", today)
     _write_parquet(prices, f"{landing_path}/prices", today)
-    if spy:
-        _write_parquet([spy], f"{landing_path}/spy_prices", today)
 
 
 if __name__ == "__main__":

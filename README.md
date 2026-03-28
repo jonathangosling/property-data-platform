@@ -113,7 +113,13 @@ Runs the full Rightmove scrape and prints a sample property and price record. No
 source .env && PYTHONPATH=src python glue/ingest.py --landing_path anything --secret_name anything --dry-run
 ```
 
-Runs the full ingest — scrape, geocode, and financial data fetch — but skips the S3 writes. Logs a summary of what would be written. Requires `GOOGLEMAPS_API_KEY` in `.env` for geocoding (omit to skip postcodes). No AWS credentials needed.
+Runs the full ingest — scrape and geocode — but skips the S3 writes. Requires `GOOGLEMAPS_API_KEY` in `.env` for geocoding (omit to skip postcodes). No AWS credentials needed.
+
+```bash
+PYTHONPATH=src python glue/ingest_spy.py --landing_path anything --dry-run
+```
+
+Fetches the last 7 days of SPY prices and logs what would be written. No AWS credentials needed.
 
 ## Deployment
 
@@ -161,7 +167,7 @@ Changes to `terraform/**` only trigger Terraform workflows. Changes to `databric
 |---|---|---|
 | `landing/properties` | `s3://{bucket}/landing/properties` | Raw property records from Rightmove, partitioned by `scraped_at` |
 | `landing/prices` | `s3://{bucket}/landing/prices` | Raw price records from Rightmove |
-| `landing/spy_prices` | `s3://{bucket}/landing/spy_prices` | SPY ETF close prices |
+| `landing/spy_prices` | `s3://{bucket}/landing/spy_prices` | SPY ETF close prices (written by the SPY ingest job) |
 
 ### Pipeline (managed by Unity Catalog, registered under `main.property_data`)
 

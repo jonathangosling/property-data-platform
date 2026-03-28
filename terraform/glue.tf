@@ -39,6 +39,27 @@ resource "aws_glue_job" "ingest" {
   timeout      = 30     # minutes
 }
 
+resource "aws_glue_job" "ingest_spy" {
+  name     = "property-data-platform-ingest-spy"
+  role_arn = aws_iam_role.glue_execution.arn
+
+  command {
+    name            = "pythonshell"
+    python_version  = "3.9"
+    script_location = "${local.glue_scripts_path}/ingest_spy.py"
+  }
+
+  default_arguments = {
+    "--landing_path"              = local.landing_path
+    "--additional-python-modules" = "yfinance,pandas,s3fs"
+    "--extra-py-files"            = "${local.glue_scripts_path}/shared.zip"
+    "--enable-job-insights"       = "false"
+  }
+
+  max_capacity = 0.0625
+  timeout      = 15 # minutes
+}
+
 resource "aws_glue_job" "silver" {
   name         = "property-data-platform-silver"
   role_arn     = aws_iam_role.glue_execution.arn
@@ -102,6 +123,17 @@ resource "aws_glue_workflow" "pipeline" {
 #
 #   actions {
 #     job_name = aws_glue_job.ingest.name
+#   }
+# }
+
+# resource "aws_glue_trigger" "ingest_spy_schedule" {
+#   name          = "property-data-platform-ingest-spy-schedule"
+#   type          = "SCHEDULED"
+#   schedule      = "cron(0 7 ? * MON *)" # 07:00 UTC every Monday
+#   workflow_name = aws_glue_workflow.pipeline.name
+#
+#   actions {
+#     job_name = aws_glue_job.ingest_spy.name
 #   }
 # }
 

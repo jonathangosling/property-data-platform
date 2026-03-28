@@ -48,7 +48,8 @@ jobs:
         run: |
           BUCKET="${{ secrets.S3_BUCKET }}"
           PREFIX="s3://${BUCKET}/glue-scripts"
-          aws s3 cp property-data-platform/glue/ingest.py  ${PREFIX}/ingest.py
-          aws s3 cp property-data-platform/glue/silver.py  ${PREFIX}/silver.py
-          aws s3 cp property-data-platform/glue/gold.py    ${PREFIX}/gold.py
+          aws s3 cp property-data-platform/glue/ingest.py     ${PREFIX}/ingest.py
+          aws s3 cp property-data-platform/glue/ingest_spy.py ${PREFIX}/ingest_spy.py
+          aws s3 cp property-data-platform/glue/silver.py     ${PREFIX}/silver.py
+          aws s3 cp property-data-platform/glue/gold.py       ${PREFIX}/gold.py
           aws s3 cp property-data-platform/src/shared.zip ${PREFIX}/shared.zip
