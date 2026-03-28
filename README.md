@@ -86,15 +86,13 @@ docs/                             # Setup notes
 cd property-data-platform
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -e ".[test]"
+pip install -r requirements.txt
 ```
-
-Installing in editable mode installs the `property_data_platform` package, all runtime dependencies, and `pytest`.
 
 ### Unit tests
 
 ```bash
-python -m pytest tests/ -v
+PYTHONPATH=src python -m pytest tests/ -v
 ```
 
 Tests cover `_parse_page` in `scrape.py` — the core parsing logic including the failure rate threshold. External API calls (Rightmove, Google Maps, BoE, yfinance) are not mocked as tests against live structure add little value and require credentials.
@@ -104,33 +102,24 @@ Tests also run in CI on every push and PR that touches `src/**` or `tests/**`, a
 ### Testing the scraper end-to-end
 
 ```bash
-python -m property_data_platform.scrape
+PYTHONPATH=src python src/scrape.py
 ```
 
 Runs the full Rightmove scrape and prints a sample property and price record. No API keys or AWS credentials required — geocoding is skipped in local mode.
 
-### Dry run (full pipeline without Delta writes)
+### Dry run (full pipeline without S3 writes)
 
 ```bash
-source .env && python -m property_data_platform.ingest --s3-bucket anything --dry-run
+source .env && PYTHONPATH=src python glue/ingest.py --landing_path anything --secret_name anything --dry-run
 ```
 
-Runs the full ingest — scrape, geocode, and financial data fetch — but skips the Delta writes. Logs a summary of what would be written. Requires `GOOGLEMAPS_API_KEY` in `.env` for geocoding (omit to skip postcodes). No AWS credentials needed.
-
-### Python wheel
-
-The scrape job runs as a Python wheel task on Databricks. The wheel is built automatically by DABs at deploy time using:
+Runs the full ingest — scrape and geocode — but skips the S3 writes. Requires `GOOGLEMAPS_API_KEY` in `.env` for geocoding (omit to skip postcodes). No AWS credentials needed.
 
 ```bash
-python3 setup.py bdist_wheel
+PYTHONPATH=src python glue/ingest_spy.py --landing_path anything --dry-run
 ```
 
-The entry point `ingest` (defined in `setup.py`) maps to `property_data_platform.ingest:main` and is invoked by the `python_wheel_task` with `--s3-bucket` as a parameter.
-
-References:
-- [Use a Python wheel file in Lakeflow Jobs](https://docs.databricks.com/aws/en/jobs/how-to/use-python-wheels-in-workflows)
-- [Build a Python wheel using Databricks Asset Bundles](https://docs.databricks.com/aws/en/dev-tools/bundles/python-wheel?language=Setuptools)
-- [Python wheel task in Databricks Jobs](https://docs.databricks.com/aws/en/jobs/python-wheel)
+Fetches the last 7 days of SPY prices and logs what would be written. No AWS credentials needed.
 
 ## Deployment
 
@@ -178,7 +167,7 @@ Changes to `terraform/**` only trigger Terraform workflows. Changes to `databric
 |---|---|---|
 | `landing/properties` | `s3://{bucket}/landing/properties` | Raw property records from Rightmove, partitioned by `scraped_at` |
 | `landing/prices` | `s3://{bucket}/landing/prices` | Raw price records from Rightmove |
-| `landing/spy_prices` | `s3://{bucket}/landing/spy_prices` | SPY ETF close prices |
+| `landing/spy_prices` | `s3://{bucket}/landing/spy_prices` | SPY ETF close prices (written by the SPY ingest job) |
 
 ### Pipeline (managed by Unity Catalog, registered under `main.property_data`)
 

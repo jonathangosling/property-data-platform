@@ -1,5 +1,5 @@
-output "delta_lake_bucket" {
-  description = "S3 bucket name for Delta Lake storage"
+output "s3_bucket" {
+  description = "S3 bucket name for landing/Iceberg storage"
   value       = aws_s3_bucket.delta_lake.bucket
 }
 

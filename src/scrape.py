@@ -43,6 +43,10 @@ HEADERS = {
 # raise an error — likely indicates a structural change to Rightmove's JSON.
 PARSE_FAILURE_THRESHOLD = 0.1
 
+# If more than this fraction of properties are missing a postcode after
+# reverse geocoding, raise an error — likely indicates a Google Maps API issue.
+POSTCODE_MISSING_THRESHOLD = 0.1
+
 
 # ---------------------------------------------------------------------------
 # Scraping
@@ -179,33 +183,40 @@ def scrape_rightmove() -> tuple[list[dict], list[dict]]:
 # Reverse geocoding
 # ---------------------------------------------------------------------------
 
-def reverse_geocode(lat: float, lng: float, api_key: str) -> str | None:
+def reverse_geocode(lat: float, lng: float, api_key: str, retries: int = 3) -> str | None:
     """
     Reverse geocode coordinates to a postcode using the Google Maps API.
     More accurate than forward geocoding from an address string since the
     coordinates come directly from Rightmove.
+    Retries up to `retries` times with exponential backoff on transient errors.
     Returns the postcode string or None if not found.
     """
-    r = requests.get(
-        "https://maps.googleapis.com/maps/api/geocode/json",
-        params={"latlng": f"{lat},{lng}", "key": api_key},
-        timeout=10,
-    )
-    r.raise_for_status()
-
-    for result in r.json().get("results", []):
-        for component in result.get("address_components", []):
-            if "postal_code" in component.get("types", []):
-                return component["long_name"]
-    return None
+    for attempt in range(1, retries + 1):
+        try:
+            r = requests.get(
+                "https://maps.googleapis.com/maps/api/geocode/json",
+                params={"latlng": f"{lat},{lng}", "key": api_key},
+                timeout=10,
+            )
+            r.raise_for_status()
+            for result in r.json().get("results", []):
+                for component in result.get("address_components", []):
+                    if "postal_code" in component.get("types", []):
+                        return component["long_name"]
+            return None
+        except requests.RequestException as e:
+            if attempt == retries:
+                log.warning(f"reverse_geocode failed after {retries} attempts ({lat},{lng}): {e}")
+                return None
+            wait = 2 ** attempt
+            log.warning(f"reverse_geocode attempt {attempt} failed, retrying in {wait}s: {e}")
+            time.sleep(wait)
 
 
 def add_postcodes(properties: list[dict], api_key: str) -> list[dict]:
     """
     Add postcode to each property record via reverse geocoding.
-    Missing postcodes are stored as None — the bronze DLT expectation
-    @dlt.expect("postcode_coverage", "postcode IS NOT NULL") will surface
-    the overall null rate in the pipeline quality metrics.
+    Raises if the missing postcode rate exceeds POSTCODE_MISSING_THRESHOLD.
     """
     missing = 0
     for prop in properties:
@@ -213,12 +224,18 @@ def add_postcodes(properties: list[dict], api_key: str) -> list[dict]:
         prop["postcode"] = postcode
         if not postcode:
             missing += 1
+        time.sleep(1 / 50)  # ensure we stay within Google Maps 50 req/s rate limit
 
-    if missing:
-        log.warning(
-            f"{missing}/{len(properties)} properties have no postcode. "
-            "These will surface in DLT bronze quality metrics."
+    missing_rate = missing / len(properties) if properties else 0
+    if missing_rate > POSTCODE_MISSING_THRESHOLD:
+        raise RuntimeError(
+            f"Missing postcode rate {missing_rate:.0%} exceeds threshold "
+            f"{POSTCODE_MISSING_THRESHOLD:.0%} "
+            f"({missing}/{len(properties)} properties). "
+            "Google Maps API may be failing."
         )
+    if missing:
+        log.warning(f"{missing}/{len(properties)} properties have no postcode.")
     return properties
 
 

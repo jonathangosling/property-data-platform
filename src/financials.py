@@ -69,22 +69,26 @@ def get_interest_rates(from_date: date, to_date: date) -> list[dict]:
     return records
 
 
-def get_spy_price() -> dict | None:
-    """Fetch the most recent SPY ETF close price."""
+def get_spy_prices(days: int = 7) -> list[dict]:
+    """Fetch SPY ETF close prices for the last `days` calendar days.
+
+    Returns one record per trading day found in the window.
+    """
     loaded_at = str(date.today())
     try:
-        df = yf.download("SPY", period="5d", auto_adjust=True, progress=False)
+        df = yf.download("SPY", period=f"{days}d", auto_adjust=True, progress=False)
         if df.empty:
             log.warning("yfinance returned empty data for SPY.")
-            return None
+            return []
         if isinstance(df.columns, pd.MultiIndex):
             df.columns = df.columns.droplevel(1)
-        latest = df.sort_index().iloc[-1]
-        return {
-            "date": str(latest.name.date()),
-            "close": round(float(latest["Close"]), 2),
-            "loaded_at": loaded_at,
-        }
+        df = df.sort_index()[["Close"]].rename(columns={"Close": "close"})
+        df["close"] = df["close"].round(2)
+        df["date"] = df.index.strftime("%Y-%m-%d")
+        df["loaded_at"] = loaded_at
+        records = df[["date", "close", "loaded_at"]].to_dict("records")
+        log.info(f"Fetched {len(records)} SPY price records.")
+        return records
     except Exception as e:
-        log.warning(f"Failed to fetch SPY price: {e}")
-        return None
+        log.warning(f"Failed to fetch SPY prices: {e}")
+        return []

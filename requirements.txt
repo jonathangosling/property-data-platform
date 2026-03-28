@@ -6,6 +6,5 @@ beautifulsoup4
 yfinance
 pandas
 
-# Databricks / Delta (for local development)
-databricks-sdk
-delta-spark
+# Testing
+pytest
