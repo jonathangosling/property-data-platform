@@ -15,6 +15,7 @@ import json
 import logging
 import time
 from datetime import date
+from typing import Optional
 
 import requests
 from bs4 import BeautifulSoup
@@ -183,7 +184,7 @@ def scrape_rightmove() -> tuple[list[dict], list[dict]]:
 # Reverse geocoding
 # ---------------------------------------------------------------------------
 
-def reverse_geocode(lat: float, lng: float, api_key: str, retries: int = 3) -> str | None:
+def reverse_geocode(lat: float, lng: float, api_key: str, retries: int = 3) -> Optional[str]:
     """
     Reverse geocode coordinates to a postcode using the Google Maps API.
     More accurate than forward geocoding from an address string since the

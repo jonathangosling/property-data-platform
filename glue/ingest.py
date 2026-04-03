@@ -14,6 +14,7 @@ import logging
 import os
 import sys
 from datetime import date
+from typing import Optional
 
 from scrape import add_postcodes, scrape_rightmove
 
@@ -24,7 +25,7 @@ _handler.setFormatter(logging.Formatter("%(levelname)s — %(message)s"))
 log.addHandler(_handler)
 
 
-def _get_api_key(secret_name: str) -> str | None:
+def _get_api_key(secret_name: str) -> Optional[str]:
     try:
         import boto3
         client = boto3.client("secretsmanager")
