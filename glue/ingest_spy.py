@@ -18,7 +18,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--landing_path", required=True)
     parser.add_argument("--dry-run", action="store_true", help="Skip S3 writes — for local testing")
-    args = parser.parse_args()
+    args, _ = parser.parse_known_args()
 
     landing_path = args.landing_path.rstrip("/")
     today = date.today()
