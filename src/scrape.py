@@ -219,12 +219,16 @@ def add_postcodes(properties: list[dict], api_key: str) -> list[dict]:
     Add postcode to each property record via reverse geocoding.
     Raises if the missing postcode rate exceeds POSTCODE_MISSING_THRESHOLD.
     """
+    total = len(properties)
+    log.info(f"Reverse geocoding {total} properties...")
     missing = 0
-    for prop in properties:
+    for i, prop in enumerate(properties, start=1):
         postcode = reverse_geocode(prop["latitude"], prop["longitude"], api_key)
         prop["postcode"] = postcode
         if not postcode:
             missing += 1
+        if i % 10 == 0 or i == total:
+            log.info(f"Geocoded {i}/{total} properties.")
         time.sleep(1 / 50)  # ensure we stay within Google Maps 50 req/s rate limit
 
     missing_rate = missing / len(properties) if properties else 0
