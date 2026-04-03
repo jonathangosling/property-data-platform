@@ -12,12 +12,16 @@ Supports --dry-run for local testing (skips S3 writes, falls back to env var for
 import argparse
 import logging
 import os
+import sys
 from datetime import date
 
 from scrape import add_postcodes, scrape_rightmove
 
-logging.basicConfig(level=logging.INFO, format="%(levelname)s — %(message)s")
 log = logging.getLogger()
+log.setLevel(logging.INFO)
+_handler = logging.StreamHandler(sys.stdout)
+_handler.setFormatter(logging.Formatter("%(levelname)s — %(message)s"))
+log.addHandler(_handler)
 
 
 def _get_api_key(secret_name: str) -> str | None:

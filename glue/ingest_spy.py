@@ -6,12 +6,16 @@ them as Parquet to the S3 landing zone.
 """
 import argparse
 import logging
+import sys
 from datetime import date
 
 from financials import get_spy_prices
 
-logging.basicConfig(level=logging.INFO, format="%(levelname)s — %(message)s")
 log = logging.getLogger()
+log.setLevel(logging.INFO)
+_handler = logging.StreamHandler(sys.stdout)
+_handler.setFormatter(logging.Formatter("%(levelname)s — %(message)s"))
+log.addHandler(_handler)
 
 
 def main() -> None:
