@@ -39,6 +39,4 @@ jobs:
 
       - name: Terraform Apply
         working-directory: terraform
-        env:
-          TF_VAR_googlemaps_api_key: ${{ secrets.GOOGLEMAPS_API_KEY }}
         run: terraform apply -auto-approve
