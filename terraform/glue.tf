@@ -115,6 +115,16 @@ resource "aws_glue_workflow" "pipeline" {
   name = "property-data-platform"
 }
 
+resource "aws_glue_trigger" "ingest_on_demand" {
+  name          = "property-data-platform-ingest-on-demand"
+  type          = "ON_DEMAND"
+  workflow_name = aws_glue_workflow.pipeline.name
+
+  actions {
+    job_name = aws_glue_job.ingest.name
+  }
+}
+
 # resource "aws_glue_trigger" "ingest_schedule" {
 #   name          = "property-data-platform-schedule"
 #   type          = "SCHEDULED"
