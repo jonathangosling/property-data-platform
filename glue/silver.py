@@ -125,6 +125,7 @@ spark.sql(f"""
         date DATE
     )
     USING iceberg
+    PARTITIONED BY (date)
     TBLPROPERTIES ('format-version' = '2')
 """)
 
