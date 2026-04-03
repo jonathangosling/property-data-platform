@@ -206,12 +206,14 @@ def reverse_geocode(lat: float, lng: float, api_key: str, retries: int = 3) -> O
                         return component["long_name"]
             return None
         except requests.RequestException as e:
+            status = e.response.status_code if e.response is not None else "N/A"
             if attempt == retries:
-                log.warning(f"reverse_geocode failed after {retries} attempts ({lat},{lng})")
+                log.warning(f"reverse_geocode failed after {retries} attempts ({lat},{lng}) status={status}")
                 return None
-            wait = 2 ** attempt
-            log.warning(f"reverse_geocode attempt {attempt} failed, retrying in {wait}s")
-            time.sleep(wait)
+            else:
+                wait = 2 ** (attempt + 1)
+                log.warning(f"reverse_geocode attempt {attempt} failed, retrying in {wait}s status={status}")
+                time.sleep(wait)
 
 
 def add_postcodes(properties: list[dict], api_key: str) -> list[dict]:
