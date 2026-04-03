@@ -100,15 +100,14 @@ spark.sql(f"""
 
 raw_prices = _read_landing("prices")
 
-w_price = Window.partitionBy("prop_id", "scraped_at").orderBy(F.desc("scraped_at"))  # raw col, renamed to date after
+w_price = Window.partitionBy("prop_id", "date").orderBy(F.desc(F.col("scraped_at").cast("timestamp")))
 
 incoming_prices = (
     raw_prices
     .withColumn("row_num", F.row_number().over(w_price))
     .filter(F.col("row_num") == 1)
-    .drop("row_num")
-    .withColumn("scraped_at", F.col("scraped_at").cast("date"))
-    .withColumnRenamed("scraped_at", "date")
+    .drop("row_num", "scraped_at")
+    .withColumn("date", F.col("date").cast("date"))
 )
 
 spark.sql(f"""

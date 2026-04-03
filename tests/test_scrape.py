@@ -1,3 +1,4 @@
+from datetime import datetime
 from unittest.mock import patch
 
 import pytest
@@ -14,7 +15,7 @@ def _make_prop(prop_id=1, price=2000, address="1 Test St", lat=51.5, lng=-0.1):
     }
 
 
-SCRAPED_AT = "2024-01-01"
+SCRAPED_AT = datetime(2024, 1, 1, 12, 0, 0)
 
 
 def test_happy_path():
@@ -29,13 +30,13 @@ def test_happy_path():
         "address": "1 Test St",
         "latitude": 51.5,
         "longitude": -0.1,
-        "scraped_at": SCRAPED_AT,
+        "scraped_at": "2024-01-01T12:00:00",
     }
     assert prices[0] == {
         "prop_id": 1,
-        "date": SCRAPED_AT,
+        "date": "2024-01-01",
         "price": 2000,
-        "scraped_at": SCRAPED_AT,
+        "scraped_at": "2024-01-01T12:00:00",
     }
 
 

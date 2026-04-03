@@ -14,7 +14,7 @@ API key from Databricks secrets, and writes landing JSON files to S3.
 import json
 import logging
 import time
-from datetime import date
+from datetime import datetime
 from typing import Optional
 
 import requests
@@ -81,7 +81,7 @@ def _get_search_results(data: dict) -> dict:
 
 
 def _parse_page(
-    search_results: dict, scraped_at: str, page_index: int
+    search_results: dict, scraped_at: datetime, page_index: int
 ) -> tuple[list[dict], list[dict]]:
     """
     Extract property and price records from a page's search results.
@@ -110,13 +110,13 @@ def _parse_page(
                 "address": address,
                 "latitude": lat,
                 "longitude": lng,
-                "scraped_at": scraped_at,
+                "scraped_at": scraped_at.isoformat(),
             })
             prices.append({
                 "prop_id": prop_id,
-                "date": scraped_at,
+                "date": str(scraped_at.date()),
                 "price": price,
-                "scraped_at": scraped_at,
+                "scraped_at": scraped_at.isoformat(),
             })
         except (KeyError, ValueError, TypeError):
             failures += 1
@@ -145,7 +145,7 @@ def scrape_rightmove() -> tuple[list[dict], list[dict]]:
     Postcodes are not included here — added separately via reverse geocoding.
     """
     session = requests.Session()
-    scraped_at = str(date.today())
+    scraped_at = datetime.now()
     all_properties, all_prices = [], []
 
     log.info("Fetching page 1...")
