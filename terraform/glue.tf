@@ -100,6 +100,7 @@ resource "aws_glue_job" "gold" {
     "--catalog_database"        = aws_glue_catalog_database.property_data.name
     "--enable-glue-datacatalog" = "true"
     "--datalake-formats"        = "iceberg"
+    "--conf"                    = "spark.sql.extensions=org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions --conf spark.sql.catalog.glue_catalog=org.apache.iceberg.spark.SparkCatalog --conf spark.sql.catalog.glue_catalog.warehouse=${local.iceberg_path} --conf spark.sql.catalog.glue_catalog.type=glue"
   }
 
   number_of_workers = 2
