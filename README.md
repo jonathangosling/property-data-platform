@@ -5,33 +5,33 @@ End-to-end rental market data pipeline for 2-bed properties in SW London.
 ## Architecture
 
 ```
-Rightmove / Bank of England / yfinance
+Rightmove / yfinance
         ↓
-Databricks Job — spot cluster (scrape + geocode + financials)
-        ↓  writes Delta tables to S3 landing zone
-Lakeflow Declarative Pipeline — serverless (silver → gold)
+AWS Glue Python Shell — ingest + ingest_spy
+        ↓  writes Parquet files to S3 landing zone
+AWS Glue ETL (Spark) — silver → gold
         ↓
-Delta tables on S3 (Unity Catalog)
+Iceberg tables on S3 (Glue Data Catalog)
         ↓
 Streamlit dashboard (Streamlit Community Cloud)
 ```
 
-**AWS infrastructure** managed by Terraform. **Databricks resources** (pipeline, job, schedule) managed by Databricks Asset Bundles.
+**AWS infrastructure** managed by Terraform. **Glue scripts** deployed to S3 via GitHub Actions.
 
 ## Repo structure
 
 ```
-terraform/                        # AWS: S3 bucket, IAM roles; Databricks: UC credential, secret scope
-resources/                        # DABs: pipeline.yml, job.yml
-pipelines/                        # Lakeflow: silver.py, gold.py
+glue/
+  ingest.py       # Python Shell — scrapes Rightmove + geocodes, writes landing Parquet
+  ingest_spy.py   # Python Shell — fetches SPY prices, writes landing Parquet
+  silver.py       # Glue ETL (Spark) — deduplicates landing into Iceberg silver tables
+  gold.py         # Glue ETL (Spark) — aggregates silver into Iceberg gold tables
 src/
-  property_data_platform/         # Python wheel package
-    __init__.py
-    scrape.py                     # Rightmove scraper + reverse geocoder
-    financials.py                 # BoE interest rates + SPY price
-    ingest.py                     # Job entry point — orchestrates scrape and Delta writes
-setup.py                          # Wheel build config (entry point: ingest)
-docs/                             # Setup notes
+  scrape.py       # Rightmove scraper + reverse geocoder (used by ingest)
+  financials.py   # yfinance SPY price fetch (used by ingest_spy)
+terraform/        # AWS: S3, IAM, Glue jobs, Glue workflow, Secrets Manager
+tests/
+  test_scrape.py  # Unit tests for scrape.py
 ```
 
 ## Resources
@@ -40,33 +40,15 @@ docs/                             # Setup notes
 
 | Resource | Purpose |
 |---|---|
-| S3 bucket `property-data-platform-{account_id}` | Stores all Delta Lake tables (landing, silver, gold) |
-| IAM role `property-data-platform-uc-storage` | Assumed by Databricks Unity Catalog to read/write the S3 bucket |
-| IAM user `property-data-platform-streamlit` | Read-only access to gold Delta tables for the Streamlit dashboard |
-
-### Databricks (managed by Terraform)
-
-| Resource | Purpose |
-|---|---|
-| Storage credential `property-data-platform-s3` | Registers the UC IAM role with Databricks so pipelines can access S3 |
-| External location `property-data-platform` | Exposes the S3 bucket as a Unity Catalog managed path |
-| Secret scope `property-data-platform` | Stores application secrets (API keys) |
-| Secret `GOOGLEMAPS_API_KEY` | Google Maps API key injected into the scrape job at runtime |
-
-### Databricks (managed by Asset Bundles)
-
-| Resource | Purpose |
-|---|---|
-| Lakeflow pipeline `property-data-platform-pipeline` | Serverless triggered pipeline — silver dedup, gold aggregations |
-| Job `property-data-platform-scrape` | Spot cluster job — scrapes Rightmove + financials, writes landing Delta tables, then triggers the pipeline |
-
-### Databricks (auto-provisioned)
-
-| Resource | Purpose |
-|---|---|
-| Workspace | Databricks workspace provisioned via AWS Marketplace |
-| Unity Catalog metastore `metastore_aws_us_east_1` | Account-level metastore managing table schemas and storage credentials |
-| Workspace storage bucket | Databricks-managed S3 bucket for workspace assets (notebooks, logs) |
+| S3 bucket `property-data-platform-{account_id}` | Landing Parquet files, Iceberg tables, Glue scripts |
+| IAM role `property-data-platform-glue-execution` | Assumed by Glue jobs to read/write S3 and Glue catalog |
+| Glue Data Catalog database `property_data` | Metastore for Iceberg silver and gold tables |
+| Glue job `property-data-platform-ingest` | Python Shell — scrape + geocode |
+| Glue job `property-data-platform-ingest-spy` | Python Shell — SPY price fetch |
+| Glue job `property-data-platform-silver` | Glue ETL — silver layer |
+| Glue job `property-data-platform-gold` | Glue ETL — gold layer |
+| Glue workflow `property-data-platform` | Orchestrates ingest → silver → gold |
+| Secrets Manager secret `property-data-platform/GOOGLEMAPS_API_KEY` | Google Maps API key injected into ingest at runtime |
 
 ### External services
 
@@ -74,16 +56,26 @@ docs/                             # Setup notes
 |---|---|
 | Rightmove | Source of property listing data (scraped via requests + BeautifulSoup) |
 | Google Maps Geocoding API | Reverse geocodes Rightmove coordinates to postcodes |
-| Bank of England API | SONIA interest rate data |
 | yfinance | SPY ETF close price (S&P 500 proxy) |
 | Streamlit Community Cloud | Free public dashboard hosting |
+
+## Glue workflow
+
+The pipeline runs as a Glue workflow triggered on demand:
+
+```
+ingest (ON_DEMAND trigger)
+    → silver (runs on ingest SUCCEEDED)
+        → gold (runs on silver SUCCEEDED)
+```
+
+`ingest_spy` runs independently and is triggered manually. Schedule triggers are defined but commented out pending stable testing.
 
 ## Local development
 
 ### Setup
 
 ```bash
-cd property-data-platform
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
@@ -95,105 +87,79 @@ pip install -r requirements.txt
 PYTHONPATH=src python -m pytest tests/ -v
 ```
 
-Tests cover `_parse_page` in `scrape.py` — the core parsing logic including the failure rate threshold. External API calls (Rightmove, Google Maps, BoE, yfinance) are not mocked as tests against live structure add little value and require credentials.
+Tests cover `_parse_page` and `add_postcodes` in `scrape.py` — parsing logic, failure rate threshold, and postcode missing rate threshold. External API calls are not tested.
 
-Tests also run in CI on every push and PR that touches `src/**` or `tests/**`, and must pass before deploy.
-
-### Testing the scraper end-to-end
+### Smoke test the scraper
 
 ```bash
 PYTHONPATH=src python src/scrape.py
 ```
 
-Runs the full Rightmove scrape and prints a sample property and price record. No API keys or AWS credentials required — geocoding is skipped in local mode.
+Runs the full Rightmove scrape and prints a sample property and price record. No API key or AWS credentials required — geocoding is skipped.
 
-### Dry run (full pipeline without S3 writes)
-
-```bash
-source .env && PYTHONPATH=src python glue/ingest.py --landing_path anything --secret_name anything --dry-run
-```
-
-Runs the full ingest — scrape and geocode — but skips the S3 writes. Requires `GOOGLEMAPS_API_KEY` in `.env` for geocoding (omit to skip postcodes). No AWS credentials needed.
+### Dry run ingest
 
 ```bash
-PYTHONPATH=src python glue/ingest_spy.py --landing_path anything --dry-run
+source .env && PYTHONPATH=src python glue/ingest.py --landing_path any --secret_name any --dry-run
 ```
 
-Fetches the last 7 days of SPY prices and logs what would be written. No AWS credentials needed.
+Runs scrape and geocode but skips S3 writes. Requires `GOOGLEMAPS_API_KEY` in `.env`. No AWS credentials needed.
+
+```bash
+PYTHONPATH=src python glue/ingest_spy.py --landing_path any --dry-run
+```
+
+Fetches 7 days of SPY prices and logs what would be written. No AWS credentials needed.
 
 ## Deployment
 
 ### Prerequisites
 
-1. Terraform applied — S3 bucket, IAM roles, UC storage credential, and secret scope provisioned
-2. Databricks workspace set up with Unity Catalog metastore attached
+1. Terraform applied — S3 bucket, IAM roles, Glue jobs, and Glue workflow provisioned
+2. Google Maps API key stored manually in Secrets Manager under `property-data-platform/GOOGLEMAPS_API_KEY`
 3. GitHub Actions secrets configured:
 
 | Secret | Description |
 |---|---|
-| `AWS_ACCESS_KEY_ID` | AWS credentials for Terraform |
-| `AWS_SECRET_ACCESS_KEY` | AWS credentials for Terraform |
+| `AWS_ACCESS_KEY_ID` | AWS credentials for Terraform and S3 deploy |
+| `AWS_SECRET_ACCESS_KEY` | AWS credentials for Terraform and S3 deploy |
 | `TF_STATE_BUCKET` | Shared Terraform state S3 bucket |
 | `TF_LOCK_TABLE` | Shared Terraform state DynamoDB lock table |
-| `DATABRICKS_HOST` | Workspace URL |
-| `DATABRICKS_TOKEN` | Personal access token |
-| `DATABRICKS_ACCOUNT_ID` | Databricks account ID (used in UC IAM trust policy) |
-| `S3_BUCKET` | Delta Lake bucket name (Terraform output) |
-| `GOOGLEMAPS_API_KEY` | Google Maps API key for reverse geocoding |
-
-### Databricks Personal Access Token
-
-The `DATABRICKS_TOKEN` secret is a Databricks PAT with a 90-day lifetime. To generate or rotate it:
-
-1. Log into the Databricks workspace → click your username (top right) → **User Settings**
-2. **Developer → Access tokens → Manage → Generate new token**
-3. Set a 90-day lifetime, copy the token
-4. Update the `DATABRICKS_TOKEN` secret in GitHub: repo → **Settings → Secrets and variables → Actions**
-
-Set a calendar reminder before the 90-day expiry — CI/CD will fail silently if the token expires without being rotated.
+| `S3_BUCKET` | Data platform S3 bucket name (Terraform output) |
 
 ### CI/CD
 
-- **PR to main** — unit tests run; Terraform plan posted as PR comment; DABs bundle validated
-- **Merge to main** — unit tests run; Terraform applied; DABs bundle deployed to prod (blocked if tests fail)
+Two workflows:
 
-Changes to `terraform/**` only trigger Terraform workflows. Changes to `databricks.yml`, `setup.py`, `resources/**`, `pipelines/**`, `src/**` only trigger the Databricks deploy workflow.
+**`glue-deploy.yml`** — triggered on changes to `glue/**`, `src/**`, or `tests/**`:
+- PRs: runs unit tests only
+- Merge to main: runs unit tests, then uploads all Glue scripts to `s3://{bucket}/glue-scripts/`
 
-## Delta tables
+**`tf-apply.yml`** — triggered on changes to `terraform/**` merged to main:
+- Runs `terraform apply -auto-approve`
 
-### Landing (written by the scrape job)
+## Tables
 
-| Table | S3 path | Description |
-|---|---|---|
-| `landing/properties` | `s3://{bucket}/landing/properties` | Raw property records from Rightmove, partitioned by `scraped_at` |
-| `landing/prices` | `s3://{bucket}/landing/prices` | Raw price records from Rightmove |
-| `landing/spy_prices` | `s3://{bucket}/landing/spy_prices` | SPY ETF close prices (written by the SPY ingest job) |
+### Landing (Parquet, written by ingest jobs)
 
-### Pipeline (managed by Unity Catalog, registered under `main.property_data`)
+| Path | Description |
+|---|---|
+| `s3://{bucket}/landing/properties/` | Raw property records from Rightmove |
+| `s3://{bucket}/landing/prices/` | Raw price records from Rightmove |
+| `s3://{bucket}/landing/spy_prices/` | SPY ETF close prices |
+
+### Silver (Iceberg, deduplicated)
 
 | Table | Description |
 |---|---|
-| `silver_properties` | Deduplicated property dimension — one row per `prop_id` |
-| `silver_prices` | Deduplicated price fact — one row per `prop_id` per date |
-| `silver_spy_prices` | Deduplicated SPY prices — one row per date |
-| `gold_property_fact` | Avg/median price and count by date and SW area code, with month and year columns |
-| `gold_current_properties` | Snapshot of listings on the most recent scrape date |
+| `silver_properties` | One row per `prop_id` — latest scrape wins |
+| `silver_prices` | One row per `prop_id` per date |
+| `silver_spy_prices` | One row per date |
+
+### Gold (Iceberg, aggregated)
+
+| Table | Description |
+|---|---|
+| `gold_property_fact` | Avg/median price and count by date and SW area code |
+| `gold_current_properties` | All listings on the most recent scrape date |
 | `gold_area_dim` | SW London area code to district name mapping |
-
-### Portability
-
-Silver and gold tables are UC-managed (serverless pipelines require UC). If you ever need to move data to Glue/Athena or another platform, create external copies with a CTAS:
-
-```sql
-CREATE TABLE glue_db.silver_properties
-LOCATION 's3://your-bucket/glue/silver_properties'
-AS SELECT * FROM main.property_data.silver_properties;
-```
-
-The landing tables are already at known S3 paths and can be registered directly in Glue without any data movement:
-
-```sql
-CREATE EXTERNAL TABLE glue_db.landing_properties
-LOCATION 's3://your-bucket/landing/properties'
-STORED AS PARQUET TBLPROPERTIES ('parquet.compress'='SNAPPY');
-```
