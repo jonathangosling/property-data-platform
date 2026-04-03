@@ -46,16 +46,13 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-east-1
 
-      - name: Package shared modules
-        working-directory: src
-        run: zip shared.zip scrape.py financials.py
-
       - name: Upload Glue scripts to S3
         run: |
           BUCKET="${{ secrets.S3_BUCKET }}"
           PREFIX="s3://${BUCKET}/glue-scripts"
-          aws s3 cp glue/ingest.py     ${PREFIX}/ingest.py
-          aws s3 cp glue/ingest_spy.py ${PREFIX}/ingest_spy.py
-          aws s3 cp glue/silver.py     ${PREFIX}/silver.py
-          aws s3 cp glue/gold.py       ${PREFIX}/gold.py
-          aws s3 cp src/shared.zip     ${PREFIX}/shared.zip
+          aws s3 cp glue/ingest.py        ${PREFIX}/ingest.py
+          aws s3 cp glue/ingest_spy.py    ${PREFIX}/ingest_spy.py
+          aws s3 cp glue/silver.py        ${PREFIX}/silver.py
+          aws s3 cp glue/gold.py          ${PREFIX}/gold.py
+          aws s3 cp src/scrape.py         ${PREFIX}/src/scrape.py
+          aws s3 cp src/financials.py     ${PREFIX}/src/financials.py
