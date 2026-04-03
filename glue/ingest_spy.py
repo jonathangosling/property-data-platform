@@ -11,7 +11,7 @@ from datetime import date
 from financials import get_spy_prices
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s — %(message)s")
-log = logging.getLogger(__name__)
+log = logging.getLogger()
 
 
 def main() -> None:

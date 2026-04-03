@@ -17,7 +17,7 @@ from datetime import date
 from scrape import add_postcodes, scrape_rightmove
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s — %(message)s")
-log = logging.getLogger(__name__)
+log = logging.getLogger()
 
 
 def _get_api_key(secret_name: str) -> str | None:
