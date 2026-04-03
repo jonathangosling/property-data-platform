@@ -126,27 +126,27 @@ resource "aws_glue_trigger" "ingest_on_demand" {
   }
 }
 
-# resource "aws_glue_trigger" "ingest_schedule" {
-#   name          = "property-data-platform-schedule"
-#   type          = "SCHEDULED"
-#   schedule      = "cron(0 7 ? * MON *)" # 07:00 UTC every Monday
-#   workflow_name = aws_glue_workflow.pipeline.name
-#
-#   actions {
-#     job_name = aws_glue_job.ingest.name
-#   }
-# }
+resource "aws_glue_trigger" "ingest_schedule" {
+  name          = "property-data-platform-schedule"
+  type          = "SCHEDULED"
+  schedule      = "cron(0 7 ? * MON *)" # 07:00 UTC every Monday
+  workflow_name = aws_glue_workflow.pipeline.name
 
-# resource "aws_glue_trigger" "ingest_spy_schedule" {
-#   name          = "property-data-platform-ingest-spy-schedule"
-#   type          = "SCHEDULED"
-#   schedule      = "cron(0 7 ? * MON *)" # 07:00 UTC every Monday
-#   workflow_name = aws_glue_workflow.pipeline.name
-#
-#   actions {
-#     job_name = aws_glue_job.ingest_spy.name
-#   }
-# }
+  actions {
+    job_name = aws_glue_job.ingest.name
+  }
+}
+
+resource "aws_glue_trigger" "ingest_spy_schedule" {
+  name          = "property-data-platform-ingest-spy-schedule"
+  type          = "SCHEDULED"
+  schedule      = "cron(0 7 ? * MON *)" # 07:00 UTC every Monday
+  workflow_name = aws_glue_workflow.pipeline.name
+
+  actions {
+    job_name = aws_glue_job.ingest_spy.name
+  }
+}
 
 resource "aws_glue_trigger" "silver_after_ingest" {
   name          = "property-data-platform-silver-trigger"

@@ -61,15 +61,17 @@ tests/
 
 ## Glue workflow
 
-The pipeline runs as a Glue workflow triggered on demand:
-
 ```
-ingest (ON_DEMAND trigger)
+ingest (Monday 07:00 UTC)
     → silver (runs on ingest SUCCEEDED)
         → gold (runs on silver SUCCEEDED)
+
+ingest_spy (Monday 07:00 UTC, independent)
 ```
 
-`ingest_spy` runs independently and is triggered manually. Schedule triggers are defined but commented out pending stable testing.
+Both jobs run weekly on Monday morning. Monday captures weekend listing activity — landlords and agents tend to list on Fridays and weekends, so Monday gives a fresh snapshot. It also ensures the prior week's SPY close prices are available from yfinance before ingest_spy runs.
+
+The workflow can also be triggered on demand via the Glue console or `aws glue start-workflow-run`.
 
 ## Local development
 
