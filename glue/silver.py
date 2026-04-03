@@ -8,6 +8,7 @@ Job Bookmarks track the last processed S3 file per dataset, so only new
 records from each ingest run are read on each execution.
 """
 import sys
+import time
 
 from awsglue.context import GlueContext
 from awsglue.job import Job
@@ -21,6 +22,7 @@ args = getResolvedOptions(sys.argv, ["JOB_NAME", "landing_path", "catalog_databa
 sc = SparkContext()
 glueContext = GlueContext(sc)
 spark = glueContext.spark_session
+log = glueContext.get_logger()
 job = Job(glueContext)
 job.init(args["JOB_NAME"], args)
 
@@ -31,7 +33,8 @@ CATALOG = "glue_catalog"
 
 def _read_landing(dataset: str):
     """Read new landing Parquet files using Job Bookmarks."""
-    return glueContext.create_dynamic_frame.from_options(
+    t0 = time.time()
+    df = glueContext.create_dynamic_frame.from_options(
         connection_type="s3",
         connection_options={
             "paths": [f"{LANDING}/{dataset}/"],
@@ -40,6 +43,9 @@ def _read_landing(dataset: str):
         format="parquet",
         transformation_ctx=f"landing_{dataset}",
     ).toDF()
+    count = df.count()
+    log.info(f"[TIMING] Read landing/{dataset}: {count} records in {time.time() - t0:.1f}s")
+    return df
 
 
 # ---------------------------------------------------------------------------
@@ -80,6 +86,7 @@ spark.sql(f"""
 """)
 
 incoming_properties.createOrReplaceTempView("incoming_properties_vw")
+t0 = time.time()
 spark.sql(f"""
     MERGE INTO {CATALOG}.{DB}.silver_properties t
     USING incoming_properties_vw s ON t.prop_id = s.prop_id
@@ -93,6 +100,7 @@ spark.sql(f"""
         t.first_seen = LEAST(t.first_seen, s.first_seen)
     WHEN NOT MATCHED THEN INSERT *
 """)
+log.info(f"[TIMING] MERGE silver_properties completed in {time.time() - t0:.1f}s")
 
 # ---------------------------------------------------------------------------
 # silver_prices — one row per prop_id per date
@@ -121,11 +129,13 @@ spark.sql(f"""
 """)
 
 incoming_prices.createOrReplaceTempView("incoming_prices_vw")
+t0 = time.time()
 spark.sql(f"""
     MERGE INTO {CATALOG}.{DB}.silver_prices t
     USING incoming_prices_vw s ON t.prop_id = s.prop_id AND t.date = s.date
     WHEN NOT MATCHED THEN INSERT *
 """)
+log.info(f"[TIMING] MERGE silver_prices completed in {time.time() - t0:.1f}s")
 
 # ---------------------------------------------------------------------------
 # silver_spy_prices — one row per date
@@ -149,10 +159,12 @@ spark.sql(f"""
 """)
 
 incoming_spy.createOrReplaceTempView("incoming_spy_vw")
+t0 = time.time()
 spark.sql(f"""
     MERGE INTO {CATALOG}.{DB}.silver_spy_prices t
     USING incoming_spy_vw s ON t.date = s.date
     WHEN NOT MATCHED THEN INSERT *
 """)
+log.info(f"[TIMING] MERGE silver_spy_prices completed in {time.time() - t0:.1f}s")
 
 job.commit()

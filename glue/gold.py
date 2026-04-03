@@ -6,6 +6,7 @@ Gold tables are fully recomputed on each run (no bookmarks needed — silver
 is the authoritative, deduplicated source).
 """
 import sys
+import time
 
 from awsglue.context import GlueContext
 from awsglue.job import Job
@@ -19,6 +20,7 @@ args = getResolvedOptions(sys.argv, ["JOB_NAME", "catalog_database"])
 sc = SparkContext()
 glueContext = GlueContext(sc)
 spark = glueContext.spark_session
+log = glueContext.get_logger()
 job = Job(glueContext)
 job.init(args["JOB_NAME"], args)
 
@@ -31,8 +33,13 @@ SW_AREA_CODES = [
     "SW18", "SW19", "SW20",
 ]
 
+t0 = time.time()
 prices = spark.read.format("iceberg").load(f"{CATALOG}.{DB}.silver_prices")
+log.info(f"[TIMING] Read silver_prices: {prices.count()} records in {time.time() - t0:.1f}s")
+
+t0 = time.time()
 props = spark.read.format("iceberg").load(f"{CATALOG}.{DB}.silver_properties")
+log.info(f"[TIMING] Read silver_properties: {props.count()} records in {time.time() - t0:.1f}s")
 
 # ---------------------------------------------------------------------------
 # gold_area_dim
@@ -57,7 +64,9 @@ spark.sql(f"""
     )
     USING iceberg
 """)
+t0 = time.time()
 gold_area_dim.writeTo(f"{CATALOG}.{DB}.gold_area_dim").overwritePartitions()
+log.info(f"[TIMING] Write gold_area_dim completed in {time.time() - t0:.1f}s")
 
 # ---------------------------------------------------------------------------
 # gold_property_fact — avg/median price by date and area
@@ -98,7 +107,9 @@ spark.sql(f"""
     )
     USING iceberg
 """)
+t0 = time.time()
 gold_property_fact.writeTo(f"{CATALOG}.{DB}.gold_property_fact").overwritePartitions()
+log.info(f"[TIMING] Write gold_property_fact completed in {time.time() - t0:.1f}s")
 
 # ---------------------------------------------------------------------------
 # gold_current_properties — snapshot of most recent scrape date
@@ -131,6 +142,8 @@ spark.sql(f"""
     )
     USING iceberg
 """)
+t0 = time.time()
 gold_current.writeTo(f"{CATALOG}.{DB}.gold_current_properties").overwritePartitions()
+log.info(f"[TIMING] Write gold_current_properties completed in {time.time() - t0:.1f}s")
 
 job.commit()
