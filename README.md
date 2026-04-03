@@ -71,7 +71,11 @@ ingest_spy (Monday 07:00 UTC, independent)
 
 Both jobs run weekly on Monday morning. Monday captures weekend listing activity — landlords and agents tend to list on Fridays and weekends, so Monday gives a fresh snapshot. It also ensures the prior week's SPY close prices are available from yfinance before ingest_spy runs.
 
-The workflow can also be triggered on demand via the Glue console or `aws glue start-workflow-run`.
+The workflow can also be triggered on demand via the Glue console (Actions → Run) or CLI:
+
+```bash
+aws glue start-workflow-run --name property-data-platform
+```
 
 ## Local development
 
