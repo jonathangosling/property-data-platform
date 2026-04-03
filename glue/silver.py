@@ -32,7 +32,7 @@ CATALOG = "glue_catalog"
 
 
 def _read_landing(dataset: str):
-    """Read new landing Parquet files using Job Bookmarks."""
+    """Read new landing Parquet files using Job Bookmarks. Returns (df, count)."""
     t0 = time.time()
     df = glueContext.create_dynamic_frame.from_options(
         connection_type="s3",
@@ -45,31 +45,15 @@ def _read_landing(dataset: str):
     ).toDF()
     count = df.count()
     log.info(f"[TIMING] Read landing/{dataset}: {count} records in {time.time() - t0:.1f}s")
-    return df
+    return df, count
 
+
+spark.sql(f"CREATE DATABASE IF NOT EXISTS {CATALOG}.{DB}")
 
 # ---------------------------------------------------------------------------
 # silver_properties — one row per prop_id (latest scrape wins)
 # ---------------------------------------------------------------------------
 
-raw_properties = _read_landing("properties")
-
-w = Window.partitionBy("prop_id").orderBy(F.desc("scraped_at"))
-w_all = Window.partitionBy("prop_id")
-
-incoming_properties = (
-    raw_properties
-    .withColumn("row_num", F.row_number().over(w))
-    .withColumn("first_seen", F.min("scraped_at").over(w_all))
-    .filter(F.col("row_num") == 1)
-    .drop("row_num")
-    .withColumn("scraped_at", F.col("scraped_at").cast("date"))
-    .withColumn("first_seen", F.col("first_seen").cast("date"))
-    .withColumn("area_code", F.substring_index(F.col("postcode"), " ", 1))
-    .withColumnRenamed("scraped_at", "last_seen")
-)
-
-spark.sql(f"CREATE DATABASE IF NOT EXISTS {CATALOG}.{DB}")
 spark.sql(f"""
     CREATE TABLE IF NOT EXISTS {CATALOG}.{DB}.silver_properties (
         prop_id INT,
@@ -85,38 +69,46 @@ spark.sql(f"""
     TBLPROPERTIES ('format-version' = '2')
 """)
 
-incoming_properties.createOrReplaceTempView("incoming_properties_vw")
-t0 = time.time()
-spark.sql(f"""
-    MERGE INTO {CATALOG}.{DB}.silver_properties t
-    USING incoming_properties_vw s ON t.prop_id = s.prop_id
-    WHEN MATCHED AND s.last_seen > t.last_seen THEN UPDATE SET
-        t.address = s.address,
-        t.latitude = s.latitude,
-        t.longitude = s.longitude,
-        t.postcode = COALESCE(s.postcode, t.postcode),
-        t.last_seen = s.last_seen,
-        t.area_code = COALESCE(s.area_code, t.area_code),
-        t.first_seen = LEAST(t.first_seen, s.first_seen)
-    WHEN NOT MATCHED THEN INSERT *
-""")
-log.info(f"[TIMING] MERGE silver_properties completed in {time.time() - t0:.1f}s")
+raw_properties, properties_count = _read_landing("properties")
+
+if properties_count == 0:
+    log.warning("No new landing/properties data — skipping MERGE update to properties table.")
+else:
+    w = Window.partitionBy("prop_id").orderBy(F.desc("scraped_at"))
+    w_all = Window.partitionBy("prop_id")
+
+    incoming_properties = (
+        raw_properties
+        .withColumn("row_num", F.row_number().over(w))
+        .withColumn("first_seen", F.min("scraped_at").over(w_all))
+        .filter(F.col("row_num") == 1)
+        .drop("row_num")
+        .withColumn("scraped_at", F.col("scraped_at").cast("date"))
+        .withColumn("first_seen", F.col("first_seen").cast("date"))
+        .withColumn("area_code", F.substring_index(F.col("postcode"), " ", 1))
+        .withColumnRenamed("scraped_at", "last_seen")
+    )
+
+    incoming_properties.createOrReplaceTempView("incoming_properties_vw")
+    t0 = time.time()
+    spark.sql(f"""
+        MERGE INTO {CATALOG}.{DB}.silver_properties t
+        USING incoming_properties_vw s ON t.prop_id = s.prop_id
+        WHEN MATCHED AND s.last_seen > t.last_seen THEN UPDATE SET
+            t.address = s.address,
+            t.latitude = s.latitude,
+            t.longitude = s.longitude,
+            t.postcode = COALESCE(s.postcode, t.postcode),
+            t.last_seen = s.last_seen,
+            t.area_code = COALESCE(s.area_code, t.area_code),
+            t.first_seen = LEAST(t.first_seen, s.first_seen)
+        WHEN NOT MATCHED THEN INSERT *
+    """)
+    log.info(f"[TIMING] MERGE silver_properties completed in {time.time() - t0:.1f}s")
 
 # ---------------------------------------------------------------------------
 # silver_prices — one row per prop_id per date
 # ---------------------------------------------------------------------------
-
-raw_prices = _read_landing("prices")
-
-w_price = Window.partitionBy("prop_id", "date").orderBy(F.desc(F.col("scraped_at").cast("timestamp")))
-
-incoming_prices = (
-    raw_prices
-    .withColumn("row_num", F.row_number().over(w_price))
-    .filter(F.col("row_num") == 1)
-    .drop("row_num", "scraped_at")
-    .withColumn("date", F.col("date").cast("date"))
-)
 
 spark.sql(f"""
     CREATE TABLE IF NOT EXISTS {CATALOG}.{DB}.silver_prices (
@@ -129,26 +121,33 @@ spark.sql(f"""
     TBLPROPERTIES ('format-version' = '2')
 """)
 
-incoming_prices.createOrReplaceTempView("incoming_prices_vw")
-t0 = time.time()
-spark.sql(f"""
-    MERGE INTO {CATALOG}.{DB}.silver_prices t
-    USING incoming_prices_vw s ON t.prop_id = s.prop_id AND t.date = s.date
-    WHEN NOT MATCHED THEN INSERT *
-""")
-log.info(f"[TIMING] MERGE silver_prices completed in {time.time() - t0:.1f}s")
+raw_prices, prices_count = _read_landing("prices")
+
+if prices_count == 0:
+    log.warning("No new landing/prices data — skipping MERGE update to prices table.")
+else:
+    w_price = Window.partitionBy("prop_id", "date").orderBy(F.desc(F.col("scraped_at").cast("timestamp")))
+
+    incoming_prices = (
+        raw_prices
+        .withColumn("row_num", F.row_number().over(w_price))
+        .filter(F.col("row_num") == 1)
+        .drop("row_num", "scraped_at")
+        .withColumn("date", F.col("date").cast("date"))
+    )
+
+    incoming_prices.createOrReplaceTempView("incoming_prices_vw")
+    t0 = time.time()
+    spark.sql(f"""
+        MERGE INTO {CATALOG}.{DB}.silver_prices t
+        USING incoming_prices_vw s ON t.prop_id = s.prop_id AND t.date = s.date
+        WHEN NOT MATCHED THEN INSERT *
+    """)
+    log.info(f"[TIMING] MERGE silver_prices completed in {time.time() - t0:.1f}s")
 
 # ---------------------------------------------------------------------------
 # silver_spy_prices — one row per date
 # ---------------------------------------------------------------------------
-
-raw_spy = _read_landing("spy_prices")
-
-incoming_spy = (
-    raw_spy
-    .drop("loaded_at")
-    .withColumn("date", F.col("date").cast("date"))
-)
 
 spark.sql(f"""
     CREATE TABLE IF NOT EXISTS {CATALOG}.{DB}.silver_spy_prices (
@@ -159,13 +158,24 @@ spark.sql(f"""
     TBLPROPERTIES ('format-version' = '2')
 """)
 
-incoming_spy.createOrReplaceTempView("incoming_spy_vw")
-t0 = time.time()
-spark.sql(f"""
-    MERGE INTO {CATALOG}.{DB}.silver_spy_prices t
-    USING incoming_spy_vw s ON t.date = s.date
-    WHEN NOT MATCHED THEN INSERT *
-""")
-log.info(f"[TIMING] MERGE silver_spy_prices completed in {time.time() - t0:.1f}s")
+raw_spy, spy_count = _read_landing("spy_prices")
+
+if spy_count == 0:
+    log.warning("No new landing/spy_prices data — skipping MERGE update to spy_price table.")
+else:
+    incoming_spy = (
+        raw_spy
+        .drop("loaded_at")
+        .withColumn("date", F.col("date").cast("date"))
+    )
+
+    incoming_spy.createOrReplaceTempView("incoming_spy_vw")
+    t0 = time.time()
+    spark.sql(f"""
+        MERGE INTO {CATALOG}.{DB}.silver_spy_prices t
+        USING incoming_spy_vw s ON t.date = s.date
+        WHEN NOT MATCHED THEN INSERT *
+    """)
+    log.info(f"[TIMING] MERGE silver_spy_prices completed in {time.time() - t0:.1f}s")
 
 job.commit()
