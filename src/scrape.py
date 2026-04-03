@@ -207,10 +207,10 @@ def reverse_geocode(lat: float, lng: float, api_key: str, retries: int = 3) -> O
             return None
         except requests.RequestException as e:
             if attempt == retries:
-                log.warning(f"reverse_geocode failed after {retries} attempts ({lat},{lng}): {e}")
+                log.warning(f"reverse_geocode failed after {retries} attempts ({lat},{lng})")
                 return None
             wait = 2 ** attempt
-            log.warning(f"reverse_geocode attempt {attempt} failed, retrying in {wait}s: {e}")
+            log.warning(f"reverse_geocode attempt {attempt} failed, retrying in {wait}s")
             time.sleep(wait)
 
 
