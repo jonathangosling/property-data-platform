@@ -10,7 +10,7 @@ resource "aws_glue_data_quality_ruleset" "silver_properties" {
       IsComplete "longitude",
       IsUnique "prop_id",
       Completeness "postcode" >= 0.9,
-      ColumnValues "area_code" matches "^SW.*" >= 0.9
+      CustomSql "SELECT COUNT_IF(area_code IS NULL OR area_code NOT LIKE 'SW%') * 1.0 / COUNT(*) FROM primary" < 0.1
     ]
   DQDL
 

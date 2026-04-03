@@ -129,10 +129,9 @@ resource "aws_glue_trigger" "ingest_schedule" {
 }
 
 resource "aws_glue_trigger" "ingest_spy_schedule" {
-  name          = "property-data-platform-ingest-spy-schedule"
-  type          = "SCHEDULED"
-  schedule      = "cron(0 7 ? * MON *)" # 07:00 UTC every Monday
-  workflow_name = aws_glue_workflow.pipeline.name
+  name     = "property-data-platform-ingest-spy-schedule"
+  type     = "SCHEDULED"
+  schedule = "cron(0 7 ? * MON *)" # 07:00 UTC every Monday — runs independently of main workflow
 
   actions {
     job_name = aws_glue_job.ingest_spy.name
