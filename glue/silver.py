@@ -72,7 +72,7 @@ spark.sql(f"""
 raw_properties, properties_count = _read_landing("properties")
 
 if properties_count == 0:
-    log.warning("No new landing/properties data — skipping MERGE update to properties table.")
+    log.warn("No new landing/properties data — skipping MERGE update to properties table.")
 else:
     w = Window.partitionBy("prop_id").orderBy(F.desc("scraped_at"))
     w_all = Window.partitionBy("prop_id")
@@ -124,7 +124,7 @@ spark.sql(f"""
 raw_prices, prices_count = _read_landing("prices")
 
 if prices_count == 0:
-    log.warning("No new landing/prices data — skipping MERGE update to prices table.")
+    log.warn("No new landing/prices data — skipping MERGE update to prices table.")
 else:
     w_price = Window.partitionBy("prop_id", "date").orderBy(F.desc(F.col("scraped_at").cast("timestamp")))
 
@@ -161,7 +161,7 @@ spark.sql(f"""
 raw_spy, spy_count = _read_landing("spy_prices")
 
 if spy_count == 0:
-    log.warning("No new landing/spy_prices data — skipping MERGE update to spy_price table.")
+    log.warn("No new landing/spy_prices data — skipping MERGE update to spy_price table.")
 else:
     incoming_spy = (
         raw_spy
