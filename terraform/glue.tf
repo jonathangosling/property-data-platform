@@ -5,6 +5,20 @@ locals {
 }
 
 # ---------------------------------------------------------------------------
+# CloudWatch Log Groups
+# ---------------------------------------------------------------------------
+
+resource "aws_cloudwatch_log_group" "glue_output" {
+  name              = "/aws-glue/python-jobs/output"
+  retention_in_days = 30
+}
+
+resource "aws_cloudwatch_log_group" "glue_error" {
+  name              = "/aws-glue/python-jobs/error"
+  retention_in_days = 30
+}
+
+# ---------------------------------------------------------------------------
 # Glue Data Catalog
 # ---------------------------------------------------------------------------
 
