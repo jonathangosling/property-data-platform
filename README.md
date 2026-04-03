@@ -140,6 +140,30 @@ Two workflows:
 **`tf-apply.yml`** — triggered on changes to `terraform/**` merged to main:
 - Runs `terraform apply -auto-approve`
 
+## Data quality
+
+### Ingest checks (fail the job)
+
+These checks run during ingestion and raise a `RuntimeError` to fail the Glue job if breached:
+
+| Job | Check | Threshold |
+|---|---|---|
+| `ingest` | Parse failure rate — fraction of Rightmove property records that fail to parse | > 10% |
+| `ingest` | Missing postcode rate — fraction of properties with no postcode after reverse geocoding | > 10% |
+| `ingest_spy` | No SPY records returned from yfinance | 0 records |
+
+### Glue Data Quality rulesets (on-demand)
+
+Rulesets are defined in Terraform and registered against each Glue catalog table. They can be run from the Glue console (Data Catalog → table → Data Quality tab) or via the AWS CLI.
+
+| Table | Rules |
+|---|---|
+| `silver_properties` | RowCount > 500, prop_id complete and unique, address/lat/lng complete, postcode completeness ≥ 90%, ≥ 90% of area codes match `SW*` |
+| `silver_prices` | RowCount > 500, prop_id/price/date complete, price between £100–£50,000 |
+| `silver_spy_prices` | RowCount > 0, date/close complete and unique, close > 0 |
+| `gold_current_properties` | RowCount > 400, prop_id/price/area_code complete, price between £100–£50,000 |
+| `gold_property_fact` | RowCount > 0, area_code/avg_price complete, avg_price between £500–£20,000, num_properties > 0 |
+
 ## Tables
 
 ### Landing (Parquet, written by ingest jobs)
