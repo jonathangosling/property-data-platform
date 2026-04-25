@@ -29,6 +29,9 @@ glue/
 src/
   scrape.py       # Rightmove scraper + reverse geocoder (used by ingest)
   financials.py   # yfinance SPY price fetch (used by ingest_spy)
+streamlit/
+  app.py          # Streamlit dashboard
+  requirements.txt
 terraform/        # AWS: S3, IAM, Glue jobs, Glue workflow, Secrets Manager
 tests/
   test_scrape.py  # Unit tests for scrape.py
@@ -116,6 +119,46 @@ PYTHONPATH=src python glue/ingest_spy.py --landing_path any --dry-run
 ```
 
 Fetches 7 days of SPY prices and logs what would be written. No AWS credentials needed.
+
+## Dashboard
+
+### Running locally
+
+1. Retrieve the Streamlit AWS credentials from Terraform outputs:
+
+```bash
+cd terraform
+terraform output -raw streamlit_access_key_id
+terraform output -raw streamlit_secret_access_key
+```
+
+2. Create `streamlit/.streamlit/secrets.toml` (gitignored):
+
+```toml
+[aws]
+aws_access_key_id = "..."
+aws_secret_access_key = "..."
+s3_bucket = "property-data-platform-{account_id}"
+```
+
+3. Run:
+
+```bash
+cd streamlit
+pip install -r requirements.txt
+streamlit run app.py
+```
+
+### Deploying to Streamlit Community Cloud
+
+1. Connect the repo in [share.streamlit.io](https://share.streamlit.io), set the main file path to `streamlit/app.py`
+2. Add the same three secrets from `secrets.toml` in the app's **Settings → Secrets** panel
+
+### Pages
+
+**Current Market** — map of active listings coloured by price, area summary table with avg/median price and count, price distribution histogram. Click rows in the table to filter all visuals by area code.
+
+**Trends Analysis** — avg price trend lines by area code, sparklines for median price and total listings, SPY ETF price chart.
 
 ## Deployment
 
