@@ -34,6 +34,7 @@ src/
 streamlit/
   app.py          # Streamlit dashboard
   requirements.txt
+.devcontainer/    # Dev container config added by Streamlit Community Cloud — enables GitHub Codespaces
 terraform/        # AWS: S3, IAM, Glue jobs, Glue workflow, Secrets Manager
 tests/
   test_scrape.py  # Unit tests for scrape.py
