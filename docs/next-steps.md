@@ -27,24 +27,31 @@ This triggers automatic expiry on each write with no extra infrastructure.
 
 Interest rate data (BoE SONIA) was removed. To be re-added via FRED API — requires a free API key from fred.stlouisfed.org.
 
-## Iceberg Spark config (if needed)
+## London expansion
 
-If the Glue ETL jobs fail to resolve the `glue_catalog` catalog, the full explicit Spark conf is:
+Extending coverage to all central London postcodes (E, EC, N, NW, SE, SW, W, WC).
 
+**Rightmove region code:** `5E87490` (generic London region — covers all postcodes)
+
+**EC/WC sub-district normalisation:** EC and WC postcodes include a trailing letter in the district segment (e.g. `EC1A`, `EC2V`). These must be normalised to `EC1`, `EC2`, etc. for area-level aggregation. Same applies to W1 and SW1. Use `regexp_extract` to strip the trailing letter:
+
+```sql
+regexp_extract(substring_index(postcode, ' ', 1), '^([A-Z]{1,2}\\d+)', 1) AS area_code
 ```
-spark.sql.extensions=org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions
-spark.sql.catalog.glue_catalog=org.apache.iceberg.spark.SparkCatalog
-spark.sql.catalog.glue_catalog.warehouse=s3://{bucket}/iceberg
-spark.sql.catalog.glue_catalog.type=glue
-```
 
-Add as `--conf` in `glue.tf` for the silver and gold jobs.
+**Geocoding cost:** Google Maps Geocoding API has a free tier of 10,000 requests/month. At ~10,000 properties/week that's ~40,000 requests/month — roughly 30,000 paid requests at ~£3.75/1,000 = **~£112/month**. This makes the current approach (geocode every property on every scrape) uneconomical at London scale.
 
-## Glue Data Quality
+**Preferred geocoding approach: postcodes.io**
 
-Glue Data Quality (DQDL) can be used to add data quality expectations to silver tables, replacing the DLT `@dlt.expect` annotations. Worth adding once the pipeline is stable.
+[postcodes.io](https://postcodes.io) is a free, open-source UK postcode API with no API key required. It supports bulk reverse geocoding via `POST /postcodes` — up to 100 lat/lng pairs per request — returning the nearest postcode for each point. This replaces Google Maps entirely for the postcode lookup use case and reduces geocoding cost to zero. At 10,000 properties, that's 100 batch requests instead of 10,000 individual ones.
 
-Suggested rules for `silver_properties`:
-- `IsComplete "postcode"` — flag null postcodes (geocoding failures)
-- `IsComplete "prop_id"` — no null IDs
-- `CustomSql "SELECT COUNT_IF(area_code IS NULL OR area_code NOT IN ('SW1','SW2',...)) / COUNT(*) FROM primary < 0.05"` — alert if more than 5% of properties are outside SW area codes, which would indicate a geocoding issue or a change to the Rightmove search results
+**Option: only geocode new properties (move geocoding to silver)**
+
+Rather than geocoding in ingest, geocoding can be deferred to the silver step:
+
+1. `ingest.py` writes raw properties with `lat`/`lng` to landing but no postcode.
+2. `silver.py` reads incoming prop_ids, LEFT JOINs against `silver_properties` to identify which prop_ids are new (no existing postcode).
+3. Only new properties are sent to the Geocoding API.
+4. The postcode is included in the MERGE so it's written once and never re-geocoded.
+
+This reduces API calls to net-new listings only — churn will be a fraction of the full 10K weekly scrape. The trade-off is that silver becomes stateful (must read existing silver before writing) and geocoding failures on the silver job are harder to retry than in the simpler ingest flow.
