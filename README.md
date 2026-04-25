@@ -2,6 +2,8 @@
 
 End-to-end rental market data pipeline for 2-bed properties in SW London.
 
+**Live dashboard: [london-properties.streamlit.app](https://london-properties.streamlit.app)**
+
 ## Architecture
 
 ```
