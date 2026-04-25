@@ -21,3 +21,6 @@ credentials.py
 
 # OS
 .DS_Store
+
+# Streamlit Secrets
+.streamlit/
