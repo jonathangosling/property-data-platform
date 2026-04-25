@@ -1,0 +1,5 @@
+streamlit
+awswrangler
+boto3
+plotly
+pandas

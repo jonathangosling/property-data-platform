@@ -88,23 +88,48 @@ resource "aws_iam_user" "streamlit_reader" {
 }
 
 resource "aws_iam_user_policy" "streamlit_reader" {
-  name = "property-data-platform-s3-read"
+  name = "property-data-platform-streamlit-read"
   user = aws_iam_user.streamlit_reader.name
 
   policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [{
-      Effect = "Allow"
-      Action = [
-        "s3:GetObject",
-        "s3:ListBucket",
-        "s3:GetBucketLocation"
-      ]
-      Resource = [
-        aws_s3_bucket.delta_lake.arn,
-        "${aws_s3_bucket.delta_lake.arn}/iceberg/gold_*"
-      ]
-    }]
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:GetObject",
+          "s3:ListBucket",
+          "s3:GetBucketLocation",
+          "s3:PutObject"
+        ]
+        Resource = [
+          aws_s3_bucket.delta_lake.arn,
+          "${aws_s3_bucket.delta_lake.arn}/iceberg/*",
+          "${aws_s3_bucket.delta_lake.arn}/athena-results/*"
+        ]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "athena:StartQueryExecution",
+          "athena:GetQueryExecution",
+          "athena:GetQueryResults",
+          "athena:StopQueryExecution",
+          "athena:GetWorkGroup"
+        ]
+        Resource = "*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "glue:GetDatabase",
+          "glue:GetTable",
+          "glue:GetTables",
+          "glue:GetPartitions"
+        ]
+        Resource = "*"
+      }
+    ]
   })
 }
 

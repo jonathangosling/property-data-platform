@@ -6,6 +6,7 @@ output "s3_bucket" {
 output "streamlit_access_key_id" {
   description = "AWS access key ID for Streamlit — add to Streamlit secrets"
   value       = aws_iam_access_key.streamlit_reader.id
+  sensitive   = true
 }
 
 output "streamlit_secret_access_key" {
